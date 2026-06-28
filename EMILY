@@ -1,0 +1,3609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>EMILY's ルーレット選曲</title>
+    <style>
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent; /* タップ時の青い影を消す */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #fff0f5;
+            padding: 20px 15px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-x: hidden;
+        }
+
+        /* 全体コンテナ */
+        .zoom-container {
+            width: 100%;
+            max-width: 600px; /* iPadの横幅（縦持ち・横持ち両対応）に最適なサイズ */
+            transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            transform-origin: center top;
+            -webkit-transform-style: preserve-3d;
+            transform-style: preserve-3d;
+        }
+        .zoom-container.zoomed {
+            transform: scale(1.15); /* Safariでボケない程度にマイルドに拡大 */
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
+
+        /* 【上側】抽選エリア */
+        .top-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            background: rgba(255,255,255,0.95);
+            padding: 24px 20px;
+            border-radius: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        /* 【中央】肉球ボタンエリア */
+        .button-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            min-height: 130px;
+        }
+
+        /* 【下側】楽曲管理エリア */
+        .bottom-section {
+            width: 100%;
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 20px;
+            border: 2px solid #ffb6c1;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+        }
+
+        h1 { font-size: 24px; color: #d63384; text-align: center; font-weight: bold; }
+
+        #slot-wrap {
+            width: 100%;
+            max-width: 380px;
+            min-height: 120px;
+            border: 8px solid #ffb6c1;
+            border-radius: 40px;
+            box-shadow: 0 10px 0 #ff69b4;
+            background: #fff;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-transform: translate3d(0,0,0); /* Safariのちらつきバグ防止 */
+            transform: translate3d(0,0,0);
+        }
+
+        #slot-default {
+            font-size: 22px;
+            font-weight: bold;
+            padding: 28px 20px;
+            text-align: center;
+            color: #d63384;
+        }
+
+        /* ── 演出A: スロット ── */
+        #anim-slot {
+            display: none;
+            width: 100%;
+            padding: 12px 6px;
+            gap: 4px;
+            justify-content: center;
+        }
+        .slot-reel {
+            flex: 1;
+            height: 72px;
+            overflow: hidden;
+            border: 2px solid #ffb6c1;
+            border-radius: 10px;
+            position: relative;
+            background: #fff8fb;
+        }
+        .slot-reel-inner {
+            position: absolute;
+            width: 100%;
+            top: 0;
+            transition: none;
+            -webkit-transform: translate3d(0,0,0);
+            transform: translate3d(0,0,0);
+        }
+        .slot-reel-inner .reel-item {
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #c2185b;
+            text-align: center;
+            padding: 4px;
+            line-height: 1.3;
+            border-bottom: 1px solid #ffe4ec;
+        }
+        .slot-reel::before, .slot-reel::after {
+            content: ''; position: absolute; left: 0; right: 0; height: 22px; z-index: 2; pointer-events: none;
+        }
+        .slot-reel::before { top: 0;    background: linear-gradient(to bottom, rgba(255,255,255,0.85), transparent); }
+        .slot-reel::after  { bottom: 0; background: linear-gradient(to top,   rgba(255,255,255,0.85), transparent); }
+
+        /* ── 演出B: カウントダウン ── */
+        #anim-countdown {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 16px;
+            gap: 6px;
+        }
+        #countdown-num {
+            font-size: 64px;
+            font-weight: 900;
+            color: #ff1493;
+            line-height: 1;
+        }
+        #countdown-result {
+            font-size: 14px;
+            font-weight: bold;
+            color: #c2185b;
+            text-align: center;
+            min-height: 26px;
+        }
+
+        @keyframes cd-flash {
+            0%   { background: #ff69b4; }
+            100% { background: #fff; }
+        }
+        .cd-flashing { animation: cd-flash 0.18s ease-out; }
+
+        /* ── 演出C: カードめくり ── */
+        #anim-card {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .play-card {
+            width: 68px;
+            height: 84px;
+            -webkit-perspective: 600px;
+            perspective: 600px;
+            cursor: pointer;
+        }
+        .play-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            -webkit-transform-style: preserve-3d;
+            transform-style: preserve-3d;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .play-card.flipped .play-card-inner { 
+            -webkit-transform: rotateY(180deg);
+            transform: rotateY(180deg); 
+        }
+        .card-face, .card-back {
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #ffb6c1;
+        }
+        .card-back {
+            background: linear-gradient(135deg, #ff69b4 0%, #ffb6c1 50%, #ff69b4 100%);
+            font-size: 24px;
+            color: #fff;
+        }
+        .card-face {
+            background: #fff;
+            -webkit-transform: rotateY(180deg);
+            transform: rotateY(180deg);
+            font-size: 10px;
+            font-weight: bold;
+            color: #c2185b;
+            text-align: center;
+            padding: 4px;
+            line-height: 1.3;
+        }
+
+        /* ── 演出D: ルーレット ── */
+        #anim-roulette {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 20px 16px;
+            gap: 4px;
+        }
+        #roulette-band {
+            width: 100%;
+            max-width: 300px;
+            height: 54px;
+            overflow: hidden;
+            border: 3px solid #ff69b4;
+            border-radius: 12px;
+            position: relative;
+            background: #fff8fb;
+        }
+        #roulette-band::before, #roulette-band::after {
+            content: ''; position: absolute; left: 0; right: 0; height: 16px; z-index: 2; pointer-events: none;
+        }
+        #roulette-band::before { top: 0;    background: linear-gradient(to bottom, rgba(255,255,255,0.9), transparent); }
+        #roulette-band::after  { bottom: 0; background: linear-gradient(to top,   rgba(255,255,255,0.9), transparent); }
+        #roulette-inner {
+            position: absolute;
+            width: 100%;
+            -webkit-transform: translate3d(0,0,0);
+            transform: translate3d(0,0,0);
+        }
+        .roulette-item {
+            height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+            color: #c2185b;
+            text-align: center;
+            padding: 4px 8px;
+        }
+        #roulette-arrows {
+            display: flex; gap: 6px; font-size: 13px; color: #ff69b4;
+        }
+
+        /* ── 演出E: ガラガラ ── */
+        #anim-garagara {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 10px;
+            gap: 8px;
+        }
+        .g-container {
+            position: relative;
+            width: 70px;
+            height: 70px;
+        }
+        .g-wheel {
+            width: 100%;
+            height: 100%;
+            border: 6px double #d4af37;
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+            border-radius: 16px;
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: center center;
+            -webkit-transform: translate3d(0,0,0);
+            transform: translate3d(0,0,0);
+        }
+        @keyframes g-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(1080deg); }
+        }
+        .g-wheel.spinning {
+            animation: g-spin 2.2s cubic-bezier(0.4, 0.1, 0.2, 1) forwards;
+        }
+        .g-stand {
+            position: absolute;
+            bottom: -6px; left: 15px;
+            width: 40px; height: 10px;
+            border-top: 3px solid #856404;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+        }
+        .g-ball {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            bottom: -2px; left: 27px;
+            opacity: 0;
+            transform: scale(0);
+            box-shadow: inset -2px -2px 4px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15);
+        }
+        @keyframes ball-drop {
+            0% { transform: translate3d(0, -10px, 0) scale(0.3); opacity: 0; }
+            40% { transform: translate3d(0, 14px, 0) scale(1.2); opacity: 1; }
+            70% { transform: translate3d(0, 10px, 0) scale(1.0); opacity: 1; }
+            100% { transform: translate3d(0, 12px, 0) scale(1.0); opacity: 1; }
+        }
+        .g-ball.dropped {
+            animation: ball-drop 0.5s ease-out 1.8s both;
+        }
+        .g-dish {
+            width: 32px; height: 8px;
+            background: #e2e3e5;
+            border-radius: 0 0 10px 10px;
+            border: 1px solid #ced4da;
+            margin-top: 10px;
+        }
+        #garagara-text {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            min-height: 14px;
+            text-align: center;
+        }
+
+        .count-badge {
+            font-size: 12px;
+            background: #ffe4ec;
+            color: #d63384;
+            border: 1px solid #ffb6c1;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        /* 結果表示 */
+        #result-display {
+            display: none;
+            width: 100%;
+            padding: 16px 12px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff1493;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        @keyframes result-pop {
+            0%   { transform: scale(0.6); opacity: 0; }
+            60%  { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        .result-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 240, 245, 0.85);
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px dashed #ffb6c1;
+            gap: 8px;
+            width: 100%;
+            max-width: 340px;
+            margin: 0 auto;
+            animation: result-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+        .result-song-text {
+            text-shadow: 0 0 12px rgba(255,105,180,0.4);
+            flex: 1;
+            text-align: left;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+        }
+        .result-del-btn {
+            background: #fff;
+            color: #ff69b4;
+            border: 1px solid #ff69b4;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        /* 立体肉球ボタン（Safari用に調整） */
+        .paw-btn {
+            position: relative;
+            width: 130px;
+            height: 125px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            outline: none;
+            transform-origin: center bottom;
+        }
+        .paw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .main-pad {
+            position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+            width: 84px; height: 76px;
+            background: radial-gradient(ellipse at 38% 32%, #ffdde6 0%, #ffb3c6 38%, #ff85a1 72%, #e8607e 100%);
+            border-radius: 50% 50% 46% 46% / 56% 56% 44% 44%;
+            box-shadow: 0 6px 0 #d4506a, 0 8px 16px rgba(200,60,90,0.3), inset 0 -4px 8px rgba(180,40,70,0.18), inset 0 6px 14px rgba(255,230,235,0.6);
+        }
+        .toe {
+            position: absolute;
+            background: radial-gradient(ellipse at 35% 28%, #ffdde6 0%, #ffb3c6 40%, #ff85a1 75%, #e8607e 100%);
+            border-radius: 50%;
+            box-shadow: 0 3px 0 #d4506a, 0 5px 10px rgba(200,60,90,0.25), inset 0 -2px 5px rgba(180,40,70,0.15), inset 0 4px 8px rgba(255,235,240,0.55);
+        }
+        .toe-1 { width: 32px; height: 30px; top: 10px; left: 8px; }
+        .toe-2 { width: 37px; height: 35px; top: 1px;  left: 34px; }
+        .toe-3 { width: 37px; height: 35px; top: 1px;  right: 34px; }
+        .toe-4 { width: 32px; height: 30px; top: 10px; right: 8px; }
+
+        @keyframes paw-squish {
+            0%   { transform: translateX(-50%) scaleY(1)    scaleX(1); }
+            40%  { transform: translateX(-50%) scaleY(0.88) scaleX(1.07); }
+            100% { transform: translateX(-50%) scaleY(1)    scaleX(1); }
+        }
+        @keyframes toe-squish {
+            0%   { transform: scale(1)    translateY(0); }
+            40%  { transform: scale(0.85) translateY(2px); }
+            100% { transform: scale(1)    translateY(0); }
+        }
+        .paw-btn.pressed .main-pad { animation: paw-squish 0.22s ease-out forwards; }
+        .paw-btn.pressed .toe      { animation: toe-squish  0.22s ease-out forwards; }
+
+        .paw-hearts {
+            position: absolute; top: -8px; left: 50%; transform: translateX(-50%); pointer-events: none; width: 0; height: 0;
+        }
+        .paw-heart { position: absolute; font-size: 17px; opacity: 0; }
+        @keyframes heart-float {
+            0%   { opacity: 1;   transform: translate3d(var(--hx), 0, 0) scale(0.5); }
+            100% { opacity: 0;   transform: translate3d(var(--hx), -60px, 0) scale(1.2); }
+        }
+        .paw-heart.go { animation: heart-float 0.7s ease-out forwards; }
+
+        #effect-badge {
+            font-size: 12px; background: #ff69b4; color: #fff; border-radius: 20px; padding: 4px 12px; opacity: 0; transition: opacity 0.3s;
+            margin-top: 5px; font-weight: bold;
+        }
+        #effect-badge.show { opacity: 1; }
+
+        .controls {
+            background: #fff; padding: 12px; border-radius: 15px; border: 2px solid #ffb6c1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%;
+            justify-content: center;
+        }
+        .controls input[type="text"] {
+            border: 1px solid #ffb6c1; border-radius: 8px; padding: 10px; font-size: 16px; outline: none; flex: 1; min-width: 140px;
+            -webkit-appearance: none;
+        }
+        
+        .controls select {
+            border: 1px solid #ffb6c1; border-radius: 8px; padding: 10px 28px 10px 12px; font-size: 16px; color: #c2185b; background-color: #fff; outline: none; cursor: pointer; font-weight: bold;
+            -webkit-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23ff69b4' d='M0 0l5 6 5-6z'/></svg>");
+            background-repeat: no-repeat; background-position: right 10px center;
+        }
+        .controls label { font-size: 14px; color: #d63384; font-weight: bold; }
+
+        .bottom-section h3 { color: #d63384; margin-bottom: 12px; font-size: 17px; font-weight: bold; }
+        
+        /* iPad用スクロールエリア最適化 */
+        #songList {
+            max-height: 280px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* 滑らかなスクロール */
+        }
+        .list-item {
+            padding: 12px 8px; border-bottom: 1px solid #ffe4ec; display: flex; justify-content: space-between; align-items: center; font-size: 15px;
+        }
+        .del-btn {
+            cursor: pointer; color: #ff69b4; font-weight: bold; background: #fff; padding: 8px 14px; border-radius: 8px; border: 1px solid #ffb6c1; flex-shrink: 0; font-size: 14px;
+        }
+        .add-area { display: flex; gap: 8px; margin-bottom: 16px; }
+        .add-area input {
+            flex: 1; border: 1px solid #ffb6c1; border-radius: 8px; padding: 10px 12px; font-size: 16px; outline: none; -webkit-appearance: none;
+        }
+        .add-area button {
+            background: #ff69b4; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-size: 15px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="zoom-container" id="zoomContainer">
+    <div class="main-wrapper">
+        
+        <div class="top-section">
+            <h1>🐾 EMILY's ルーレット選曲 🐾</h1>
+
+            <div class="controls">
+                <label>🔍 検索</label>
+                <input type="text" id="searchInput" placeholder="アーティスト・曲名…" oninput="renderList()">
+                
+                <div class="count-badge">該当: <span id="searchCount">0</span>曲</div>
+
+                <label>選曲数</label>
+                <select id="selectCount">
+                    <option value="1" selected>1曲</option>
+                    <option value="2">2曲</option>
+                    <option value="3">3曲</option>
+                    <option value="4">4曲</option>
+                    <option value="5">5曲</option>
+                    <option value="6">6曲</option>
+                    <option value="7">7曲</option>
+                    <option value="8">8曲</option>
+                    <option value="9">9曲</option>
+                    <option value="10">10曲</option>
+                </select>
+            </div>
+
+            <div id="slot-wrap">
+                <div id="slot-default">準備OK？</div>
+                <div id="anim-slot"></div>
+                <div id="anim-countdown">
+                    <div id="countdown-num">3</div>
+                    <div id="countdown-result"></div>
+                </div>
+                <div id="anim-card"></div>
+                <div id="anim-roulette">
+                    <div id="roulette-arrows">▼ LUCKY DRAW ▼</div>
+                    <div id="roulette-band"><div id="roulette-inner"></div></div>
+                </div>
+                <div id="anim-garagara">
+                    <div class="g-container">
+                        <div class="g-wheel" id="gWheel"></div>
+                        <div class="g-stand"></div>
+                        <div class="g-ball" id="gBall"></div>
+                    </div>
+                    <div class="g-dish"></div>
+                    <div id="garagara-text"></div>
+                </div>
+                <div id="result-display"></div>
+            </div>
+
+            <div id="effect-badge"></div>
+        </div>
+
+        <div class="button-section">
+            <button class="paw-btn" id="pawBtn" onclick="startSlot()" aria-label="ルーレット開始">
+                <div class="paw-hearts" id="pawHearts">
+                    <span class="paw-heart" style="--hx:-24px" id="ph1">🌸</span>
+                    <span class="paw-heart" style="--hx:2px"   id="ph2">✨</span>
+                    <span class="paw-heart" style="--hx:22px"  id="ph3">💕</span>
+                </div>
+                <div class="toe toe-1"></div>
+                <div class="toe toe-2"></div>
+                <div class="toe toe-3"></div>
+                <div class="toe toe-4"></div>
+                <div class="main-pad"></div>
+            </button>
+        </div>
+
+        <div class="bottom-section">
+            <h3>楽曲管理（全 <span id="songCount">0</span> 曲）</h3>
+            <div class="add-area">
+                <input type="text" id="addInput" placeholder="曲を追加… 例: ZARD - 負けないで" onkeydown="if(event.key==='Enter')addSong()">
+                <button onclick="addSong()">＋ 追加</button>
+            </div>
+            <div id="songList"></div>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+let allSongs = [
+"ABBA - DANCING QUEEN",
+"Ado - Tot Musica",
+"Ado - ウタカタララバイ",
+"Ado - ギラギラ",
+"Ado - 逆光",
+"Ado - 私は最強",
+"Ado - 唱",
+"Ado - 新時代",
+"Ado - 世界のつづき",
+"Ado - 風のゆくえ",
+"Ado - 踊",
+"aiko - 果てしない二人",
+"aiko - 桜の時",
+"aiko - 三国駅",
+"aiko - 相思相愛",
+"aiko - 蝶々結び",
+"aiko - 瞳",
+"aiko - 恋をしたのは",
+"Aimer - Amazing Grace (Live in church ver.)",
+"Aimer - Ref_rain",
+"Aimer - あなたに出会わなければ ～夏雪冬花～",
+"Aimer - コイワズライ",
+"Aimer - ポラリス",
+"Aimer - 花びらたちのマーチ",
+"Aimer - 残響散歌",
+"Aimer - 思い出は奇麗で",
+"Aimer - 春はゆく",
+"Aimer - 朝が来る",
+"Aimer - 蝶々結び",
+"Aimer - 凍えそうな季節から",
+"Aimer - 六等星の夜",
+"Aimer -カタオモイ ",
+"Aimer -星屑ビーナス　",
+"AKB48 - 365日の紙飛行機",
+"AKB48 - 47の素敵な街へ",
+"AKB48 - Green Flash",
+"AKB48 - UZA",
+"AKB48 - クラスメイト",
+"AKB48 - そばかすのキス",
+"AKB48 - フライングゲット",
+"AKB48 - 禁じられた2人",
+"AKB48 - 元カレです",
+"AKB48 - 元カレです (Moto Kare-desu)",
+"AKB48 - 向日葵",
+"AKB48 - 根も葉もRumor",
+"AKB48 - 恋とか…",
+"AKB48　ヒット　メドレー1",
+"AKB48-ギンガムチェック　",
+"AKB48-ハート型ウイルス",
+"AKB48-ヘビーローテーション",
+"AKB48-君はメロディー",
+"Alan Walker - Sing Me To Sleep",
+"Alone-ハート",
+"Ariana Grande,John Legend - Beauty and the Beast 美女と野獣",
+"B'z - ultra soul",
+"B'z- 今夜月の見える丘に",
+"BABYMETAL - NO RAIN, NO RAINBOW",
+"BABYMETAL - ギミチョコ！！",
+"BABYMETAL- メギツネ",
+"back number - ハッピーエンド",
+"back number - 海岸通り",
+"back number - 高嶺の花子さん",
+"back number - 水平線",
+"back number- ヒロイン",
+"Bank Band with Salyu- to U",
+"Barbra Streisand - The Way We Were",
+"Bette Midler - The Rose",
+"Bette Midler- From a Distance",
+"Beyonce - Honesty",
+"Beyoncé - Honesty",
+"BeyoncéHonestyオネスティ Beyonceビヨンセ",
+"BILLY JOEL - JUST THE WAY YOU ARE(素顔のままで)",
+"birdbird - 童神",
+"BLACK BISCUITS - タイミング",
+"BoA - Every Heart-ミンナノキモチ-",
+"BoA - LA・LA・LA LOVE SONG(BoA w_z SOUL'd OUT)",
+"BoA - NO.1",
+"BoA - VALENTI",
+"Bon Jovi - Runaway",
+"Bon Jovi- It's My Life",
+"BONNIE PINK - Last Kiss  ",
+"BONNIE TYLER - HOLDING OUT FOR A HERO",
+"BROCKBEATS - Hot spring",
+"C-C-B- Romanticが止まらない",
+"CANDY TUNE- 倍倍FIGHT!",
+"CARPENTERS - A Song For You",
+"CARPENTERS - ALL YOU GET FROM LOVE IS A LOVE SONG",
+"Carpenters - Close To You",
+"CARPENTERS - Crystal Lullaby",
+"CARPENTERS - Please Mr. Postman",
+"CARPENTERS - RAINY DAYS AND MONDAYS",
+"CARPENTERS - SOLITAIRE",
+"Carpenters - SUPERSTAR スーパースター  ",
+"Carpenters - THIS MASQUERADE  ",
+"CARPENTERS - THOSE GOOD OLD DREAMS",
+"CARPENTERS - TICKET TO RIDE",
+"CARPENTERS - TOUCH ME WHEN WE'RE DANCING",
+"CARPENTERS- Bless The Beasts And Children",
+"CARPENTERS- HURTING EACH OTHER",
+"CARPENTERS- JAMBALAYA(ON THE BAYOU)",
+"CARPENTERS- Merry Christmas, Darling",
+"CARPENTERS- Top of the World",
+"CARPENTERS- We've Only Just Begun",
+"CARPENTERS- Yesterday Once More",
+"Cecile Corbel - Arrietty's Song (English version)  ",
+"Celine Dion - A SONG FOR YOU",
+"Celine Dion - A WORLD TO BELIEVE IN",
+"Celine Dion - All By Myself",
+"Celine Dion - ALONE",
+"Celine Dion - BE THE MAN",
+"Celine Dion - EYES ON ME",
+"Celine Dion - I Drove All Night",
+"Celine Dion - I Want You To Need Me",
+"Celine Dion - IT'S ALL COMING BACK TO ME NOW",
+"Celine Dion - MY HEART WILL GO ON",
+"Celine Dion - RIGHT NEXT TO THE RIGHT ONE",
+"Celine Dion - SHADOW OF LOVE",
+"Celine Dion - SKIES OF L.A.",
+"Celine Dion - TAKING CHANCES",
+"Celine Dion - That's The Way It Is",
+"Celine Dion - The First Time Ever I saw Your Face",
+"Celine Dion - THE POWER OF THE DREAM",
+"Celine Dion - To Love You More",
+"Celine Dion & アール・ケリーCeline Dion & アール・ケリー - I'm Your Angel",
+"Celtic Woman - You Raise Me Up  ",
+"CHAGE&ASKACHAGE&ASKA - 恋人はワイン色",
+"Chara - FANTASY",
+"Chara - Swallowtail Butterfly ～あいのうた～  ",
+"Chara - タイムマシーン",
+"Chara - やさしい気持ち  ",
+"Chara - ラブラドール",
+"Chara - 大切をきずくもの",
+"Chara - 片想い",
+"chaychay - あなたに恋をしてみました",
+"CHEMISTRY- PIECES OF A DREAM",
+"CHEMISTRY- Point of No Return",
+"CHEMISTRY- 明治チェルシーの唄",
+"Chicago - Hard to Say I’m Sorry (Single Edit Version)",
+"Chicago - HARD TO SAY I'M SORRY(素直になれなくて)",
+"CHICKS - すいみん不足",
+"CHiCO with HoneyWorks - 世界は恋に落ちている  ",
+"ClariS - ALIVE",
+"ClariS - コネクト",
+"class - 夏の日の1993",
+"class - 冬の日の2009",
+"Clayton Jokythur - Prison Break",
+"Clean Bandit- Symphony",
+"Cocco - Raining",
+"Cocco - てぃんさぐぬ花",
+"Cocco - 強く儚い者たち  ",
+"CUTIE STREET - かわいいだけじゃだめですか？",
+"Cyndi Lauper - Girls Just Want To Have Fun",
+"Cyndi Lauper - She Bop",
+"Cyndi Lauper - Time After Time",
+"Cyndi Lauper - TRUE COLORS",
+"DAOKO×米津玄師 - 打上花火  ",
+"DEBBIE GIBSON - Electric Youth",
+"DEEN - Teenage dream",
+"DEEN - 君は1000%",
+"DIAMOND☆YUKAI - 夕暮れ",
+"Diana Ross - If We Hold On Together  ",
+"Dionne Warwick - Close To You _ 遥かなる影  ",
+"DISH__ - 猫  ",
+"DISH___ - No.1",
+"Disney - A Whole New World [Aladdin]  ",
+"Dream5 - 恋のダイヤル6700  ",
+"DREAMS COME TRUE - 24_7 -TWENTY FOUR_SEVEN-",
+"DREAMS COME TRUE - 2人のDIFFERENCE",
+"DREAMS COME TRUE - 7月7日､晴れ",
+"DREAMS COME TRUE - a little waltz",
+"DREAMS COME TRUE - APPROACH",
+"DREAMS COME TRUE - LAT.43°N ～forty-three degrees north latitude～",
+"DREAMS COME TRUE - LOVE GOES ON…  ",
+"DREAMS COME TRUE - WINTER SONG",
+"DREAMS COME TRUE - あなたとトゥラッタッタ♪",
+"DREAMS COME TRUE - うれしい！たのしい！大好き！",
+"DREAMS COME TRUE - さぁ鐘を鳴らせ",
+"DREAMS COME TRUE - サンキュ.",
+"DREAMS COME TRUE - もしも雪なら",
+"DREAMS COME TRUE - やさしいキスをして  ",
+"DREAMS COME TRUE - 決戦は金曜日",
+"DREAMS COME TRUE - 笑顔の行方  ",
+"DREAMS COME TRUE - 晴れたらいいね  ",
+"DREAMS COME TRUE - 雪のクリスマス",
+"DREAMS COME TRUE - 大阪LOVER",
+"DREAMS COME TRUE - 朝がまた来る",
+"DREAMS COME TRUE - 風切って行こう！",
+"DREAMS COME TRUE - 忘れないで",
+"DREAMS COME TRUE - 未来予想図Ⅱ",
+"DREAMS COME TRUE-LOVE LOVE LOVE　",
+"DREAMS COME TRUE-何度でも　",
+"E-girls-おどるポンポコリン",
+"EAST END×YURI - DA.YO.NE",
+"Elton John - Just Like Noah's Ark",
+"Elton John - Your Song",
+"Elvis Presley - Love Me Tender",
+"Engelbert Humperdinck - A Time For Us _ ロミオとジュリエット",
+"Enya - Orinoco Flow (Sail Away)",
+"Enya- Only Time   エンヤ",
+"EPO - う,ふ,ふ,ふ",
+"Eric ClaptonEric Clapton - Tears in Heaven",
+"erica - あなたへ贈る歌  ",
+"Every Little Thing - All along",
+"Every Little Thing - azure moon",
+"Every Little Thing - Dear My Friend",
+"Every Little Thing - DREAM GOES ON",
+"Every Little Thing - Face the change",
+"Every Little Thing - Feel My Heart",
+"Every Little Thing - flavor",
+"Every Little Thing - For the moment",
+"Every Little Thing - FOREVER YOURS",
+"Every Little Thing - fragile",
+"Every Little Thing - Future World",
+"Every Little Thing - Get Into A Groove",
+"Every Little Thing - good night",
+"Every Little Thing - Graceful World",
+"Every Little Thing - Grip!",
+"Every Little Thing - Here and everywhere",
+"Every Little Thing - Hometown",
+"Every Little Thing - JIRENMA",
+"Every Little Thing - jump",
+"Every Little Thing - Looking Back on Your Love",
+"Every Little Thing - NECESSARY",
+"Every Little Thing - Never Stop!",
+"Every Little Thing - nostalgia",
+"Every Little Thing - One",
+"Every Little Thing - Over and Over",
+"Every Little Thing - Pray",
+"Every Little Thing - Rescue me",
+"Every Little Thing - Season",
+"Every Little Thing - self reliance",
+"Every Little Thing - Shapes Of Love",
+"Every Little Thing - Smile Again",
+"Every Little Thing - Someday, Someplace",
+"Every Little Thing - stray cat",
+"Every Little Thing - sure",
+"Every Little Thing - The One Thing",
+"Every Little Thing - Time goes by ",
+"Every Little Thing - アイガアル",
+"Every Little Thing - あたらしい日々",
+"Every Little Thing - きみの て",
+"Every Little Thing - キモチ",
+"Every Little Thing - キラメキアワー",
+"Every Little Thing - キヲク",
+"Every Little Thing - サクラビト",
+"Every Little Thing - ささやかな祈り",
+"Every Little Thing - しあわせの風景",
+"Every Little Thing - スイミー",
+"Every Little Thing - ソラアイ",
+"Every Little Thing - ハイファイ メッセージ",
+"Every Little Thing - ハリネズミの恋",
+"Every Little Thing - ファンダメンタル・ラブ",
+"Every Little Thing - また あした",
+"Every Little Thing - ルーム",
+"Every Little Thing - 愛のカケラ",
+"Every Little Thing - 愛の謳",
+"Every Little Thing - 今でも…あなたが好きだから",
+"Every Little Thing - 出逢った頃のように",
+"Every Little Thing - 冬がはじまるよ feat.槇原敬之",
+"Every Little Thing - 冷たい雨",
+"Every Little Thing - 恋をしている",
+"Every Little Thing - 恋文",
+"Every Little Thing- AMBIVALENCE",
+"AKB48  エブリデイカチューシャ",
+"Everything MISIA",
+"EXILE - Choo Choo TRAIN",
+"Finzy KontiniFinzy Kontini - Cha Cha Cha",
+"Floor JansenFloor Jansen - Phantom of the Opera",
+"fripSide - only my railgun  ",
+"fripSidefripSide - LEVEL5-Judgelight-",
+"FRUITS ZIPPER - わたしの一番かわいいところ",
+"FUNKY MONKEY BABYS - あとひとつ",
+"Gacharic Spin - RPG",
+"GARNET CROW - Over Drive  ",
+"Gee　少女時代",
+"GLAMOROUS SKY         NANA starring MIKA NAKASHIMA",
+"GLAY - 誘惑",
+"GLAY- HOWEVER",
+"GLAY- Winter,again",
+"globe - Feel Like dance  ",
+"globe - FREEDOM  ",
+"globe - Get Wild",
+"globe - I'm still alone",
+"globe - Is this love",
+"globe - Joy to the love",
+"globe - Love again",
+"globe - SWEET PAIN",
+"globe - You are the one",
+"globe-Can't Stop Fallin' in Love",
+"globe-DEPACHERS",
+"go!go!vanillasgo!go!vanillas - カントリー・ロード(TAKE ME HOME, COUNTRY ROADS)",
+"GreeeeN - キセキ (Kiseki)",
+"GreeeeN - 旅立ち",
+"GUMI - 金曜日のおはよう  ",
+"H Jungle With tH Jungle with t - WOW WAR TONIGHT ～時には起こせよムーヴメント～",
+"H2O  - 想い出がいっぱい",
+"hitomi - LOVE 2000  ",
+"HKT48- メロンジュース",
+"HKT48- 最高かよ",
+"Honey L DaysHoney L Days - The Rose",
+"HoneyWorks - 1%の恋人  ",
+"HoneyWorks - Re_初恋の絵本  ",
+"HoneyWorks - さみしがりや  ",
+"HoneyWorks - さよなら両片想  ",
+"HoneyWorks - シス×ラブ  ",
+"HoneyWorks - すきっちゅーの! feat.かぴ",
+"HoneyWorks - 可愛くてごめん ",
+"HoneyWorks - 金曜日のおはよう-another story-  ",
+"HY - 366日",
+"HY - Song for…  ",
+"HY - 時をこえ",
+"JAYWALK - 何も言えなくて…夏",
+"JITTERIN'JINN - にちようび  ",
+"JITTERIN'JINN - プレゼント  ",
+"JUDY AND MARY - KYOTO",
+"JUDY AND MARY - LOVER SOUL",
+"JUDY AND MARY - Over Drive  ",
+"JUDY AND MARY - くじら12号  ",
+"JUDY AND MARY - クリスマス",
+"JUDY AND MARY - そばかす",
+"JUDY AND MARY - ラッキープール  ",
+"JUDY AND MARY - ラブリーベイベー  ",
+"JUDY AND MARY - 散歩道",
+"JUDY AND MARY - 小さな頃から  ",
+"JUDY AND MARY - 夕暮れ",
+"Judy Garland - Over The Rainbow",
+"JUJU - Hello, Again ～昔からある場所～",
+"JUJU - LA・LA・LA LOVE SONG",
+"JUJU - Last Kiss",
+"JUJU - sign",
+"JUJU - Swallowtail Butterfly ～あいのうた～",
+"JUJU - この夜を止めてよ",
+"JUJU - じれったい",
+"JUJU - ただいま",
+"JUJU - また明日...",
+"JUJU - やさしさで溢れるように",
+"JUJU - ラストシーン",
+"JUJU - 元気を出して",
+"JUJU - 誰より好きなのに  ",
+"JUJU - 東京",
+"JUJU - 明日がくるなら JUJU with JAY'ED",
+"JUJU - 恋におちて",
+"Jun. K(From 2PM)- 私たちの別れた話",
+"JY - 好きな人がいること",
+"KAN - 愛は勝つ  ",
+"King&Prince - シンデレラガール  ",
+"KinKi Kid - 硝子の少年",
+"Kiroro - Best Friend  ",
+"Kiroro - 花は咲く",
+"Kiroro - 生きてこそ",
+"Kiroro - 長い間  ",
+"Kiroro - 冬のうた",
+"KOKIA - Hallelujah  ",
+"KOKIA - Love Me Tender  ",
+"KOKIA - ありがとう…  ",
+"KREVA - 今夜はブギー・バック  ",
+"Kylie Minogue - The Loco-Motion  ",
+"Kylie Minogue - Turn It into Love  ",
+"Lady Gaga - Born This Way  ",
+"Lady Gaga & Bradley Cooper - Shallow  ",
+"LE VELVETS - TIME TO SAY GOODBYE  ",
+"LEGEND - 永遠の0  ",
+"Lemon（レモン）　米津玄師",
+"Lia - My Soul,Your Beats!  ",
+"Lia - 鳥の詩  ",
+"LIMAHL - THE NEVER ENDING STORY  ",
+"LINDBERG - BELIEVE IN LOVE  ",
+"LINDBERG - every little thing every precious thing  ",
+"LINDBERG - GAMBAらなくちゃね  ",
+"LINDBERG - 今すぐKiss Me  ",
+"LINDBERG - 恋をしようよ Yeah! Yeah!  ",
+"LiSA - ADAMAS  ",
+"LiSA - 炎  ",
+"LiSA - 紅蓮華 （ぐれんげ）  ",
+"LiSA - 明け星  ",
+"LiSA×Uru - 再会(produced by Ayase)  ",
+"Little Glee Monster - いつかこの涙が  ",
+"Little Glee Monster - きっと大丈夫  ",
+"Loren Allred - Never Enough  ",
+"LOVE PSYCHEDELICO - Last Smile  ",
+"LOVE PSYCHEDELICO - Your Song  ",
+"MADONNA - 4 MINUTES (FEAT. JUSTIN TIMBERLAKE AND TIMBALAND)  ",
+"Madonna - American Life  ",
+"Madonna - ANGEL  ",
+"MADONNA - BEAT GOES ON (FEAT. KANYE WEST)  ",
+"MADONNA - BORDERLINE  ",
+"MADONNA - CANDY SHOP  ",
+"Madonna - CHERISH  ",
+"MADONNA - CRAZY FOR YOU  ",
+"MADONNA - DANCE 2NIGHT  ",
+"Madonna - Drowned World / Substitute For Love  ",
+"Madonna - Easy Ride  ",
+"MADONNA - HEARTBEAT  ",
+"MADONNA - HOLIDAY  ",
+"Madonna - Hollywood  ",
+"Madonna - Hung Up  ",
+"Madonna - I Love New York  ",
+"Madonna - I'm So Stupid  ",
+"MAHO堂 - おジャ魔女カーニバル!!  ",
+"majiko - エミリーと15の約束  ",
+"MAKE-UP (JPN) - ペガサス幻想 (Pegasus Fantasy)  ",
+"MANNA - でてこいとびきりZENKAIパワー！  ",
+"mao - 夢をかなえてドラえもん  ",
+"MARIAH CAREY - HERO  ",
+"MARIAH CAREY - WITHOUT YOU  ",
+"MAX - 一緒に…  ",
+"May J. - Never Enough  ",
+"May'n - ノーザンクロス  ",
+"MeseMoa. - 真逆の糸  ",
+"Mi-Ke - 想い出の九十九里浜  ",
+"Mike - ブルーライト ヨコスカ  ",
+"Mike - 想い出の九十九里浜  ",
+"millennium parade × Belle - U  ",
+"MINAKO with WILD CATS - あなたと、熱帯  ",
+"MINAKO WITH WILD CATS - 愛が聞こえる  ",
+"Minnie Riperton - Lovin' You  ",
+"MINNIE RIPERTON - LOVIN'YOU  ",
+"MISIA - Everything  ",
+"MISIA - アイノカタチ feat.HIDE(GReeeeN)",
+"MISIA - つつみ込むように…  ",
+"MISIA - 逢いたくていま  ",
+"MISIA - 希望のうた  ",
+"MISIA - 名前のない空を見上げて  ",
+"miwa - 441  ",
+"miwa - don't cry anymore  ",
+"miwa - あなたがここにいて抱きしめることができるなら  ",
+"miwa - 結 -ゆい-  ",
+"miwa - 夜空。feat.ハジ→  ",
+"momo-i - アタックNo.1のテーマ  ",
+"mona(夏川椎菜) - No.1  ",
+"mona(夏川椎菜) - ファンサ  ",
+"mona(夏川椎菜) - 私、アイドル宣言  ",
+"mona(夏川椎菜) feat.HoneyWorks - 誇り高きアイドル  ",
+"MONGOL800 - 小さな恋のうた  ",
+"Mr.Children - 365日  ",
+"Mr.Children - GIFT  ",
+"Mr.Children - HANABI  ",
+"Mr.Children - HERO  ",
+"Mr.Children - Sign  ",
+"Mr.Children - Tomorrow never knows  ",
+"Mr.Children - イノセントワールド  ",
+"Mr.Children - シーソーゲーム〜勇敢な恋の歌〜  ",
+"Mr.Children - しるし  ",
+"Mr.Children - 君がいた夏  ",
+"Mr.Children - 終わりなき旅  ",
+"Mr.Children - 星になれたら  ",
+"Mr.Children - 抱きしめたい  ",
+"Mr.Children - 名もなき詩  ",
+"Mrs. GREEN APPLE - 点描の唄(feat.井上苑子)  ",
+"Ms.OOJA - 見上げてごらん夜の星を  ",
+"My Heart Will Go On セリーヌ・ディオン　タイタニックの歌",
+"My Little Lover - ALICE  ",
+"My Little Lover - DESTINY  ",
+"My Little Lover - Hello, Again ～昔からある場所～  ",
+"My Little Lover - Man & Woman  ",
+"My Little Lover - NOW AND THEN ～失われた時を求めて～  ",
+"My Little Lover - YES ～free flower～  ",
+"My Little Lover - 日傘 －japanese beauty－  ",
+"My Little Lover - 白いカイト  ",
+"My Sweet Home 小泉今日子",
+"MYNAME - With Or Without You  ",
+"Nena - 99 Luftballons (New Version)  ",
+"Nena - 99 Red Balloons  ",
+"Nena - ロック・バルーンは99  ",
+"NGT48 - Maxとき315号  ",
+"NiziU - Make you happy（メイクユーハッピー）  ",
+"NOKKO - フレンズ  ",
+"NOKKO - ライブがはねたら  ",
+"NOKKO - 人魚  ",
+"NOKKO - 白い恋人達  ",
+"NYC - 勇気100%  ",
+"Official髭男dism - 115万キロのフィルム  ",
+"Official髭男dism - Cry Baby  ",
+"Official髭男dism - I LOVE...  ",
+"Official髭男dism - Laughter  ",
+"Official髭男dism - Pretender  ",
+"Official髭男dism - Subtitle  ",
+"Official髭男dism - TATTOO  ",
+"Official髭男dism - Universe  ",
+"Official髭男dism - イエスタデイ  ",
+"Official髭男dism - ホワイトノイズ  ",
+"Official髭男dism - ミックスナッツ  ",
+"Official髭男dism - 犬かキャットかで死ぬまで喧嘩しよう!  ",
+"Official髭男dism - 宿命  ",
+"Olivia Newton-John - JOLENE  ",
+"ONE OK ROCK - Be the light  ",
+"ONE OK ROCK - Fight the night  ",
+"ONE OK ROCK - Heartache  ",
+"One Ok Rock - Nobody's Home  ",
+"ONE OK ROCK - Pierce  ",
+"ONE OK ROCK - The Beginning  ",
+"ONE OK ROCK - Wasted Nights  ",
+"ONE OK ROCK - Wherever you are",
+"ONE OK ROCK - アンサイズニア  ",
+"ONE OK ROCK - カラス  ",
+"ORANGE RANGE - ロコローション  ",
+"ORANGE RANGE - 花  ",
+"PAPA DON'T PREACH",
+"PENICILLIN - ロマンス  ",
+"PENICILLIN - 北ウイング -PENICILLIN ver.-  ",
+"Perfume - STAR TRAIN  ",
+"Perfume - チョコレイト・ディスコ  ",
+"Perfume - レーザービーム  ",
+"Petit Milady - 緋ノ糸輪廻ノGEMINI  ",
+"PIECE OF MY WISH　今井美樹",
+"PRINCESS PRINCESS - M  ",
+"PRINCESS PRINCESS - OH YEAH!  ",
+"PRINCESS PRINCESS - SEVEN YEARS AFTER  ",
+"PRINCESS PRINCESS - ジュリアン  ",
+"PRINCESS PRINCESS - 世界でいちばん熱い夏  ",
+"PRINCESS PRINCESS – Diamonds",
+"PUFFY - これが私の生きる道  ",
+"PUFFY - 愛のしるし  ",
+"PUFFY - 渚にまつわるエトセトラ  ",
+"QBS - 風のように  ",
+"Queen - We Are the Champions  ",
+"QUEENDOM - チキチキバンバン  ",
+"RADWIMPS - すずめの涙  ",
+"RADWIMPS - スパークル (movie ver.)  ",
+"RADWIMPS - 前前前世 ",
+"Re_Japan - 明日があるさ  ",
+"REBECCA - 76th Star  ",
+"REBECCA - CHEAP HIPPIES  ",
+"REBECCA - Cotton Love  ",
+"REBECCA - LONELY BUTTERFLY  ",
+"REBECCA - LOVE PASSION  ",
+"REBECCA - Maybe Tomorrow  ",
+"REBECCA - MOON  ",
+"REBECCA - OLIVE  ",
+"REBECCA - RASPBERRY DREAM  ",
+"REBECCA - Super Girl  ",
+"REBECCA - ヴァージニティー  ",
+"REBECCA - ガールズ ブラボー！  ",
+"REBECCA - フレンズ  ",
+"REBECCA - ラズベリー・ドリーム  ",
+"REBECCA - 結接蘭 破接蘭 (KE-SE-RUN PA-SE-RUN)  ",
+"Rihwa - 春風  ",
+"Roselia - FIRE BIRD  ",
+"ROXETTE - It Must Have Been Love  ",
+"Roxette - The Look  ",
+"Sadie - ペガサス幻想  ",
+"sads - smily sadly  ",
+"Salyu - to U（Salyu ver.）  ",
+"Sarah Alainn - I Dreamed A Dream  ",
+"Sarah Brightman - A Question of Honour  ",
+"SAYAKA - ever since  ",
+"SAYAKA - 上弦の月  ",
+"Schiller & Rebecca Ferguson - Love  ",
+"Secret of my heart 倉木麻衣",
+"See-Saw - 君は僕に似ている  ",
+"SEIKO MATSUDA - 星に願いを  ",
+"SEKAI NO OWARI - Habit  ",
+"SEKAI NO OWARI - RAIN  ",
+"SEKAI NO OWARI - RPG  ",
+"SEKAI NO OWARI - silent  ",
+"SEKAI NO OWARI - umbrella  ",
+"SEKAI NO OWARI - サザンカ  ",
+"SEKAI NO OWARI - スターライトパレード  ",
+"SEKAI NO OWARI - 炎と森のカーニバル  ",
+"SHANTI - Killing Me Softly With His Song  ",
+"SHEENA EASTON - FOR YOUR EYES ONLY  ",
+"Sheryl Crow - If It Makes You Happy  ",
+"SHINE'S - 私の彼はサラリーマン  ",
+"SHISHAMO - 明日も  ",
+"Shocking Blue - Venus  ",
+"SILENT SIREN - チェリボム  ",
+"Simon & Garfunkel - A Hazy Shade Of Winter  ",
+"SIMON & GARFUNKEL - THE SOUND OF SILENCE  ",
+"Sinita - Toy Boy  ",
+"SKE48 - パレオはエメラルド  ",
+"SMAP - Triangle  ",
+"SMAP - セロリ  ",
+"SMAP - ダイナマイト  ",
+"SMAP - らいおんハート  ",
+"SMAP - 世界に一つだけの花  ",
+"SMAP - 青いイナズマ  ",
+"SMAP - 夜空ノムコウ  ",
+"Sotte Bosse - RPG  ",
+"SPEED - ALIVE  ",
+"SPEED - Be My Love  ",
+"SPEED - BODY & SOUL  ",
+"SPEED - Go! Go! Heaven  ",
+"SPEED - my graduation",
+"SPEED - STEADY  ",
+"SPEED - White Love  ",
+"StarS - The Music Of The Night（オペラ座の怪人より）  ",
+"STU48 - 暗闇  ",
+"STU48 - 花は誰のもの  ",
+"STU48 - 大好きな人  ",
+"STU48 - 風を待つ  ",
+"STU48 - 無謀な夢は覚めることがない  ",
+"SUGAR - ウェディング・ベル",
+"suis from ヨルシカ - 若者のすべて  ",
+"Superfly - Beautiful  ",
+"Superfly - タマシイレボリューション  ",
+"Superfly - 愛をこめて花束を  ",
+"Superfly - 輝く月のように  ",
+"T-BOLAN - JUST ILLUSION  ",
+"T.M.Revolution - HOT LIMIT  ",
+"Taylor Swift - Shake It Off  ",
+"Taylor Swift - We Are Never Ever Getting Back Together  ",
+"The Beatles - A Day In The Life  ",
+"The Beatles - A Hard Day's Night  ",
+"The Beatles - Act Naturally  ",
+"The Beatles - All You Need Is Love  ",
+"The Beatles - And I Love Her  ",
+"The Beatles - Anna  ",
+"The Beatles - Back In The U.S.S.R.  ",
+"The Beatles - Birthday  ",
+"The Beatles - Blackbird  ",
+"The Beatles - Can't Buy Me Love  ",
+"The Beatles - Chains  ",
+"The Beatles - Come Together  ",
+"The Beatles - Day Tripper  ",
+"The Beatles - Dizzy Miss Lizzy  ",
+"The Beatles - Do You Want To Know A Secret  ",
+"The Beatles - Don't Let Me Down  ",
+"The Beatles - Don't Pass Me By  ",
+"The Beatles - Drive My Car  ",
+"The Beatles - Eight Days A Week  ",
+"The Beatles - Eleanor Rigby  ",
+"The Beatles - From Me To You  ",
+"The Beatles - Get Back  ",
+"The Beatles - Girl  ",
+"The Beatles - Golden Slumbers  ",
+"The Beatles - Good Day Sunshine  ",
+"The Beatles - Good Night  ",
+"The Beatles - Got To Get You Into My Life  ",
+"The Beatles - Hello, Goodbye  ",
+"The Beatles - Help!  ",
+"The Beatles - Here Comes The Sun  ",
+"The Beatles - Here, There And Everywhere  ",
+"The Beatles - I Am The Walrus  ",
+"The Beatles - I Call Your Name  ",
+"The Beatles - I Feel Fine  ",
+"The Beatles - I Saw Her Standing There  ",
+"The Beatles - I Should Have Known Better  ",
+"The Beatles - I Wanna Be Your Man  ",
+"The Beatles - I Want To Hold Your Hand  ",
+"The Beatles - I Will  ",
+"The Beatles - I'll Follow The Sun  ",
+"The Beatles - If I Fell  ",
+"The Beatles - In My Life  ",
+"The Beatles - Julia  ",
+"The Beatles - Lady Madonna  ",
+"The Beatles - Let It Be  ",
+"The Beatles - Lucy In The Sky With Diamonds  ",
+"The Beatles - No Reply  ",
+"The Beatles - Norwegian Wood  ",
+"The Beatles - Nowhere Man  ",
+"The Beatles - Octopus's Garden  ",
+"The Beatles - Oh! Darling  ",
+"The Beatles - P.S. I Love You  ",
+"The Beatles - Paperback Writer  ",
+"The Beatles - Penny Lane  ",
+"The Beatles - Please Please Me  ",
+"The Beatles - Run For Your Life  ",
+"The Beatles - Sgt. Pepper's Lonely Hearts Club Band  ",
+"The Beatles - She Loves You  ",
+"The Beatles - She's A Woman  ",
+"The Beatles - She's Leaving Home  ",
+"The Beatles - Slow Down  ",
+"The Beatles - Something  ",
+"The Beatles - Strawberry Fields Forever  ",
+"The Beatles - Taxman  ",
+"The Beatles - The Ballad Of John And Yoko  ",
+"The Beatles - The Long And Winding Road  ",
+"The Beatles - Things We Said Today  ",
+"The Beatles - Ticket To Ride  ",
+"The Beatles - Till There Was You  ",
+"The Beatles - Twist & Shout  ",
+"The Beatles - Two Of Us  ",
+"The Beatles - We Can Work It Out  ",
+"The Beatles - With A Little Help From My Friends  ",
+"The Beatles - Yellow Submarine  ",
+"The Beatles - Yesterday  ",
+"The Beatles - You've Got To Hide Your Love Away  ",
+"The Beatles - Your Mother Should Know  ",
+"THE BOOM - 島唄",
+"the brilliant green - There will be love there -愛のある場所-",
+"THE 虎舞竜 - ロード～第三章",
+"Tiara - おやすみ",
+"Time After Time - Cyndi Lauper",
+"TM NETWORK - Get Wild",
+"TOMORROW 岡本真夜",
+"Too Far Away 伊藤薫",
+"trf - BOY MEETS GIRL  ",
+"TRF - CRAZY GONNA CRAZY  ",
+"TRF - EZ DO DANCE  ",
+"trf - survival dAnce -no no cry more-  ",
+"trf - 寒い夜だから…",
+"TRIPLANE - 浴衣の君  ",
+"TUBE - シーズン・イン・ザ・サン",
+"UA - 情熱  ",
+"Uru - remember  ",
+"Uru - The last rain",
+"Uru - あなたがいることで",
+"Uru - あなたがここにいて抱きしめることができるなら  ",
+"Uru - それを愛と呼ぶなら  ",
+"Uru - フリージア",
+"Uru - プロローグ",
+"Uru - 今 逢いに行く  ",
+"Uru - 心得  ",
+"USA for Africa - We Are The World  ",
+"V6 - 愛なんだ  ",
+"wacci - 別の人の彼女になったよ",
+"WHAM! - LAST CHRISTMAS",
+"Wink - One Night In Heaven",
+"Wink - Sugar Baby Love",
+"Wink - 愛が止まらない",
+"Wink - 淋しい熱帯魚",
+"Wink - 涙をみせないで",
+"X JAPAN - ENDLESS RAIN  ",
+"X JAPAN - Forever Love",
+"X JAPAN - Joker  ",
+"X JAPAN - Miscast  ",
+"X JAPAN - Rusty Nail  ",
+"X JAPAN - Say Anything  ",
+"X JAPAN - Silent Jealousy  ",
+"X JAPAN - WEEK END  ",
+"X JAPAN - Without You (LIVE VERSION)  ",
+"X JAPAN - X  ",
+"Ya-Ya-yah - 世界がひとつになるまで  ",
+"YESTERDAY ONCE MORE イエスタデイ・ワンス・モア  カーペンターズ ",
+"YESTERDAY ONCE MORE イエスタデイ・ワンス・モア  カーペンターズ ",
+"YOASOBI - アイドル  ",
+"YOASOBI - あの夢をなぞって",
+"YOASOBI - アンコール",
+"YOASOBI - たぶん",
+"YOASOBI - ハルカ",
+"YOASOBI - ハルジオン",
+"YOASOBI - もう少しだけ",
+"YOASOBI - ラブレター  ",
+"YOASOBI - 怪物",
+"YOASOBI - 群青",
+"YOASOBI - 三原色  ",
+"YOASOBI - 祝福  ",
+"YOASOBI - 夜に駆ける",
+"YOASOBI - 優しい彗星",
+"YOASOBI with ミドリーズ - ツバメ  ",
+"You're My Only Shinin' Star 中山美穂",
+"YUI - a room  ",
+"YUI - CHE.R.RY",
+"YUI - Cooking  ",
+"YUI - fight  ",
+"YUI - Get Back Home  ",
+"YUI - Good night  ",
+"YUI - Good-bye days",
+"YUI - Green a.live  ",
+"YUI - Happy Birthday to you you",
+"YUI - HELLO  ",
+"YUI - HELLO〜Paradise Kiss〜  ",
+"YUI - If you  ",
+"YUI - It's My Life  ",
+"YUI - Kiss me  ",
+"YUI - Let's face it  ",
+"YUI - Lock On  ",
+"YUI - Muffler  ",
+"YUI - My friend  ",
+"YUI - Nobody Knows  ",
+"YUI - OH YEAH  ",
+"YUI - Rain  ",
+"YUI - YOU  ",
+"YUI - Your Heaven  ",
+"ZARD - Boy  ",
+"ZARD - Brand New Love  ",
+"ZARD - CAN'T TAKE MY EYES OFF OF YOU  ",
+"ZARD - Change my mind  ",
+"ZARD - DAN DAN 心魅かれてく  ",
+"ZARD - Dangerous Tonight  ",
+"ZARD - Don't you see!  ",
+"ZARD - Forever",
+"ZARD - Forever you  ",
+"ZARD - Get U're Dream  ",
+"ZARD - GOOD DAY  ",
+"ZARD - Good-bye My Loneliness  ",
+"ZARD - hero",
+"ZARD - I can't let go  ",
+"ZARD - I can't tell  ",
+"ZARD - I feel fine, yeah  ",
+"ZARD - I still remember  ",
+"ZARD - I Want You  ",
+"ZARD - I'm in love  ",
+"ZARD - If you gimme smile  ",
+"ZARD - IN MY ARMS TONIGHT  ",
+"ZARD - Just believe in love  ",
+"ZARD - Just for you  ",
+"ZARD - Listen to me",
+"ZARD - Lonely Soldier Boy  ",
+"ZARD - LOVE",
+"ZARD - Love is Gone  ",
+"ZARD - MIND GAMES  ",
+"ZARD - My Baby Grand ～ぬくもりが欲しくて～  ",
+"ZARD - Oh my love  ",
+"ZARD - Oh! Sugar Baby  ",
+"ZARD - pray",
+"ZARD - promised you  ",
+"ZARD - Ready, GO!  ",
+"ZARD - Season  ",
+"ZARD - Seven Rainbow  ",
+"ZARD - So Together",
+"ZARD - Stray Love  ",
+"ZARD - Take me to your dream  ",
+"ZARD - Teenage dream  ",
+"ZARD - The Only Truth I Know Is You  ",
+"ZARD - Today is another day  ",
+"ZARD - Top Secret",
+"ZARD - Vintage  ",
+"ZARD - Why Don't you Leave Me Alone  ",
+"ZARD - You and me (and…)  ",
+"ZARD - あなたと共に生きてゆく  ",
+"ZARD - あなたに帰りたい  ",
+"ZARD - あなたのせいじゃない  ",
+"ZARD - あなたを感じていたい  ",
+"ZARD - あなたを好きだけど  ",
+"ZARD - あの微笑みを忘れないで  ",
+"ZARD - いつかは…  ",
+"ZARD - お・も・ひ・で  ",
+"ZARD - かけがえのないもの  ",
+"ZARD - カナリヤ  ",
+"ZARD - カラッといこう!  ",
+"ZARD - きっと忘れない  ",
+"ZARD - クリスマス タイム  ",
+"ZARD - グロリアスマインド  ",
+"ZARD - この愛に泳ぎ疲れても  ",
+"ZARD - この涙 星になれ  ",
+"ZARD - こんなにそばに居るのに  ",
+"ZARD - こんなに愛しても",
+"ZARD - サヨナラは今もこの胸に居ます  ",
+"ZARD - サヨナラまでのディスタンス  ",
+"ZARD - サヨナラ言えなくて  ",
+"ZARD - さわやかな君の気持ち  ",
+"ZARD - セパレート・ウェイズ  ",
+"ZARD - ハートに火をつけて  ",
+"ZARD - ハイヒール脱ぎ捨てて  ",
+"ZARD - ひとりが好き  ",
+"ZARD - フォトグラフ  ",
+"ZARD - マイ フレンド  ",
+"ZARD - もう少し あと少し…  ",
+"ZARD - もう探さない  ",
+"ZARD - もっと近くで君の横顔見ていたい  ",
+"ZARD - リセット  ",
+"ZARD - 愛が見えない  ",
+"ZARD - 愛しい人よ～名もなき旅人よ～  ",
+"ZARD - 愛は暗闇の中で  ",
+"ZARD - 愛は眠ってる  ",
+"ZARD - 愛を信じていたい  ",
+"ZARD - 異邦人  ",
+"ZARD - 雨が降り出す前に  ",
+"ZARD - 雨に濡れて  ",
+"ZARD - 運命のルーレット廻して  ",
+"ZARD - 永遠  ",
+"ZARD - 遠い星を数えて  ",
+"ZARD - 遠い日のNostalgia  ",
+"ZARD - 黄昏にMy Lonely Heart",
+"ZARD - 夏を待つセイルのように  ",
+"ZARD - 汗の中でCRY  ",
+"ZARD - 帰らぬ時間の中で  ",
+"ZARD - 気楽に行こう",
+"ZARD - 君がいたから",
+"ZARD - 君がいない",
+"ZARD - 君とのふれあい  ",
+"ZARD - 君に逢いたくなったら…  ",
+"ZARD - 月に願いを  ",
+"ZARD - 見つめていたいね  ",
+"ZARD - 好きなように踊りたいの  ",
+"ZARD - 今すぐ会いに来て  ",
+"ZARD - 今日はゆっくり話そう  ",
+"ZARD - 今日も  ",
+"ZARD - 止まっていた時計が今動き出した  ",
+"ZARD - 私だけ見つめて  ",
+"ZARD - 少女の頃に戻ったみたいに  ",
+"ZARD - 心を開いて  ",
+"ZARD - 世界はきっと未来の中  ",
+"ZARD - 星のかがやきよ",
+"ZARD - 素直に言えなくて  ",
+"ZARD - 息もできない  ",
+"ZARD - 誰かが待ってる  ",
+"ZARD - 淡い雪がとけて  ",
+"ZARD - 瞳そらさないで",
+"ZARD - 瞳閉じて  ",
+"ZARD - 突然  ",
+"ZARD - 二人の夏  ",
+"ZARD - 悲しいほど貴方が好き  ",
+"ZARD - 不思議ね…  ",
+"ZARD - 負けないで  ",
+"ZARD - 負けないで  ",
+"ZARD - 風が通り抜ける街へ  ",
+"ZARD - 眠り  ",
+"ZARD - 眠れない夜を抱いて  ",
+"ZARD - 明日を夢見て  ",
+"ZARD - 目覚めた朝は…  ",
+"ZARD - 約束のない恋  ",
+"ZARD - 揺れる想い  ",
+"ZARD - 翼を広げて  ",
+"ZARD - 来年の夏も  ",
+"ZARD - 恋女の憂鬱",
+"ZOO - Choo Choo TRAIN  ",
+"ZYYG, REV, ZARD & WANDS featuring 長嶋茂雄 - 果てしない夢を  ",
+"あゝ人生に涙あり 水戸黄門の歌",
+"あいみょん - 19歳になりたくない  ",
+"あいみょん - 3636  ",
+"あいみょん - GOOD NIGHT BABY  ",
+"あいみょん - あなたのために  ",
+"あいみょん - さよならの今日に  ",
+"あいみょん - ジェニファー  ",
+"あいみょん - シガレット  ",
+"あいみょん - そんな風に生きている  ",
+"あいみょん - チカ  ",
+"あいみょん - どうせ死ぬなら  ",
+"あいみょん - ハート  ",
+"あいみょん - ハッピー  ",
+"あいみょん - ハルノヒ  ",
+"あいみょん - プレゼント  ",
+"あいみょん - マリーゴールド  ",
+"あいみょん - 愛の花  ",
+"あいみょん - 愛を知るまでは  ",
+"あいみょん - 愛を伝えたいだとか  ",
+"あいみょん - 貴方解剖純愛歌 ～死ね～  ",
+"あいみょん - 君はロックを聴かない  ",
+"あいみょん - 生きていたんだよな  ",
+"あいみょん - 裸の心  ",
+"あいみょん - 恋をしたから  ",
+"アグネス・チャン - ひなげしの花  ",
+"アグネス・チャン - 草原の輝き  ",
+"アジアの純真　PUFFY",
+"あなたがいることで Uru",
+"あなたを・もっと・知りたくて 薬師丸ひろ子",
+"あべ静江 - みずいろの手紙  ",
+"あみん - 琥珀色の想い出  ",
+"アリス - 遠くで汽笛を聞きながら  ",
+"あわてんぼうのサンタクロース",
+"アン・ルイス - WOMAN  ",
+"アン・ルイス - あゝ無情  ",
+"アン・ルイス - あゝ無情  ",
+"アン・ルイス - グッド・バイ・マイ・ラブ  ",
+"アン・ルイス - 六本木心中  ",
+"あんしんパパ - はじめてのチュウ  ",
+"いい日旅立ち 山口百恵",
+"いきものがかり - SAKURA  ",
+"いきものがかり - Sweet! Sweet! Music!  ",
+"いきものがかり - TSUZUKU  ",
+"いきものがかり - YELL  ",
+"いきものがかり - ありがとう  ",
+"いきものがかり - キミがいる  ",
+"いきものがかり - コイスルオトメ  ",
+"いきものがかり - じょいふる  ",
+"いきものがかり - プラネタリウム  ",
+"いきものがかり - ブルーバード  ",
+"いきものがかり - 茜色の約束  ",
+"いきものがかり - 花は桜 君は美し  ",
+"いきものがかり - 帰りたくなったよ  ",
+"いきものがかり - 気まぐれロマンティック  ",
+"いきものがかり - 笑ってたいんだ  ",
+"いきものがかり - 心の花を咲かせよう  ",
+"いきものがかり - 晴々！  ",
+"いきものがかり - 地球  ",
+"いきものがかり - 熱情のスペクトラム  ",
+"いきものがかり - 風が吹いている  ",
+"いきものがかり - 歩いていこう  ",
+"いしだあゆみ - ブルー・ライト・ヨコハマ  ",
+"イモ欽トリオ - ハイスクールララバイ  ",
+"イルカ - なごり雪  ",
+"イルカ - 雨の物語  ",
+"イルカ - 海岸通  ",
+"ウイスキーが、お好きでしょ SAYURI",
+"ヴィレッジ・シンガーズ - 亜麻色の髪の乙女  ",
+"うしろゆびさされ組 - うしろゆびさされ組",
+"うしろゆびさされ組 - バナナの涙  ",
+"うっせぇわ Ado",
+"ウマ娘 - うまぴょい伝説  ",
+"ウルフルズ - ガッツだぜ!!  ",
+"ウルフルズ - バンザイ〜好きでよかった〜  ",
+"えりあし　aiko",
+"エレファントカシマシ - 今宵の月のように  ",
+"おニャン子クラブ - じゃあね  ",
+"おニャン子クラブ - セーラー服を脱がさないで",
+"おニャン子クラブ - 真赤な自転車  ",
+"オフコース - Yes-No  ",
+"オフコース - さよなら  ",
+"オフコース - 愛を止めないで  ",
+"オフコース - 言葉にできない  ",
+"オフコース - 秋の気配  ",
+"オフコース - 眠れぬ夜  ",
+"オリビアを聴きながら 杏里　",
+"お祭りマンボ　美空ひばり",
+"カズン - 冬のファンタジー  ",
+"きただにひろし - ウィーアー!  ",
+"キッスは目にして!　ザ・ヴィーナス　",
+"きみのいた部屋",
+"きゃりーぱみゅぱみゅ - Crazy Party Night ～ぱんぷきんの逆襲～  ",
+"きゃりーぱみゅぱみゅ - インベーダーインベーダー  ",
+"きゃりーぱみゅぱみゅ - キミに100パーセント  ",
+"きゃりーぱみゅぱみゅ - にんじゃりばんばん  ",
+"きゃりーぱみゅぱみゅ - ファッションモンスター  ",
+"キャンディーズ - やさしい悪魔  ",
+"キャンディーズ - 春一番  ",
+"キャンディーズ - 年下の男の子",
+"キュン　日向坂46",
+"くらげP - ビースト・ダンス  ",
+"クラシック JUDY AND MARY",
+"クリス・ハート - 白い恋人達  ",
+"クリスマスソング back numbe",
+"グレープ - 精霊流し  ",
+"ゴダイゴ - MONKEY MAGIC  ",
+"ゴダイゴ - ガンダーラ  ",
+"ゴダイゴ - 銀河鉄道999  ",
+"こっちのけんと - はいよろこんで  ",
+"ザ・カーナビーツ - 好きさ好きさ好きさ  ",
+"ザ・サベージ - いつまでもいつまでも  ",
+"ザ・ドリフターズ - いい湯だな(ビバノン・ロック)  ",
+"ザ・ドリフターズ - ドリフのズンドコ節  ",
+"サイレント・イヴ  辛島美登里",
+"ささきいさお - 宇宙戦艦ヤマト  ",
+"サザンオールスターズ - チャコの海岸物語  ",
+"サザンオールスターズ - 夏をあきらめて  ",
+"サザンオールスターズ - 鎌倉物語  ",
+"サザンオールスターズ - 希望の轍  ",
+"サザンオールスターズ - 涙のキッス  ",
+"さだまさし - 関白宣言  ",
+"さだまさし - 秋桜  ",
+"さだまさし - 神田川  ",
+"さだまさし - 精霊流し  ",
+"さだまさし - 道化師のソネット  ",
+"サディスティック・ミカ・バンド - タイムマシンにお願い  ",
+"ザナドゥ  オリビア・ニュートン＝ジョン",
+"さよならエレジー 菅田将暉 ",
+"さよならの向う側 山口百恵",
+"サンプラザ中野くん - 大きな玉ねぎの下で  ",
+"シェネル - ビリーヴ  ",
+"ジェリー藤尾 - 遠くへ行きたい  ",
+"シェリル・ノーム starring May'n / ランカ・リー＝中島愛 - いけないボーダーライン  ",
+"ジャッキー吉川とブルー・コメッツ - ウェルカム・ビートルズ  ",
+"シャ乱Q - いいわけ  ",
+"シャ乱Q - シングルベッド  ",
+"シャ乱Q - ズルい女  ",
+"シャ乱Q - ラーメン大好き小池さんの唄  ",
+"シャ乱Q - 上・京・物・語  ",
+"シンデレラ サマー 石川優子",
+"スガシカオ - Progress  ",
+"スターダスト☆レビュー - AMAZING GRACE  ",
+"スターダスト☆レビュー - Daydream Believer  ",
+"スタジオジブリメドレー1　（ジブリメドレー）",
+"スピッツ - スパイダー  ",
+"スピッツ - チェリー  ",
+"スピッツ - ロビンソン  ",
+"スピッツ - 空も飛べるはず  ",
+"スピッツ - 君が思い出になる前に  ",
+"スピッツ - 春の歌  ",
+"スピッツ - 渚  ",
+"スピッツ - 青い車  ",
+"スピッツ - 楓  ",
+"スピッツ - 魔法  ",
+"スピッツ - 魔法のコトバ  ",
+"スピッツ - 遥か  ",
+"スピッツ - 涙  ",
+"スピッツ - 涙がキラリ☆  ",
+"セーラー服と機関銃　薬師丸ひろ子",
+"セシル　　浅香唯",
+"セリーヌ・ディオン - 時は永遠に  ",
+"ソナーポケット - WAKUWAKU  ",
+"そよ風の誘惑-オリビア・ニュートン＝ジョン",
+"ソルティ - Amazing Grace  ",
+"ダ・カーポ - 結婚するって本当ですか  ",
+"ダ・カーポ - 野に咲く花のように  ",
+"タイナカサチ - きらめく涙は星に  ",
+"ただ泣きたくなるの　中山美穂",
+"タッチ　稲葉浩志",
+"タッチ　岩崎良美",
+"たばこ　コレサワ",
+"ダンデライオン ～遅咲きのたんぽぽ　松任谷由実",
+"ちあきなおみ - 喝采  ",
+"チェッカーズ - ギザギザハートの子守唄  ",
+"チェッカーズ - 星屑のステージ  ",
+"チェッカーズ - 涙のリクエスト  ",
+"チキンライス 浜田雅功と槇原敬之",
+"ちびまる子ちゃん with 爆チュー問題 - アララの呪文  ",
+"チャラン・ポ・ランタン - 愛の讃歌  ",
+"チューリップ - 心の旅  ",
+"チューリップ - 青春の影  ",
+"つじあやの - 君は天然色  ",
+"つじあやの - 風になる  ",
+"つるの剛士 - ペガサス幻想  ",
+"ディズニー - Part of Your World  ",
+"テレサ・テン - つぐない  ",
+"テレサ・テン - 愛人",
+"テレサ・テン - 空港  ",
+"テレサ・テン - 時の流れに身をまかせ  ",
+"テレサ・テン - 別れの予感  ",
+"テレサ・テン - 北の宿から  ",
+"でんぱ組.inc - イロドリセカイ  ",
+"とた - 紡ぐ  ",
+"となりのトトロ　井上あずみ",
+"ドリーミング - アンパンマンのマーチ  ",
+"トワ・エ・モワ - 誰もいない海  ",
+"とんねるず - ガラガラヘビがやってくる  ",
+"なごり雪 イルカ",
+"なんてったってアイドル  小泉今日子",
+"ニノミヤユイ - 私だけの、革命。  ",
+"にんげんっていいな　中嶋義実・ヤングフレッシュ",
+"ノーサイド　松任谷由実",
+"のはらしんのすけ(矢島晶子) - オラはにんきもの  ",
+"ハナミズキ　一青窈",
+"ハピネス　AI",
+"パプリカ　Foorin",
+"バブルガム・ブラザーズ - WON'T BE LONG  ",
+"ハム太郎とっとこうた　ハムちゃんず（ハム太郎のうた）",
+"バルーン - シャルル  ",
+"ばんばひろふみ - 「いちご白書」をもう一度  ",
+"バンバン - 『いちご白書』をもう一度  ",
+"ヒア・ウィズ・ミー   マシュメロ",
+"ヒカリヘ　MIWA",
+"ひこうき雲　 松任谷由実",
+"ピスケス - P.S I Love You  ",
+"ひだまりの詩 Le Couple",
+"ひと夏の経験　山口百恵",
+"ビリー・バンバン - 白いブランコ  ",
+"ピンク・レディー - S・O・S  ",
+"ピンク・レディー - UFO  ",
+"ピンク・レディー - ウォンテッド  ",
+"ピンク・レディー - サウスポー  ",
+"ピンク・レディー - ペッパー警部  ",
+"ピンク・レディー - モンスター  ",
+"ピンク・レディー - 渚のシンドバッド  ",
+"ピンク・レディー - 透明人間  ",
+"フィンガー5 - 恋のダイヤル6700  ",
+"ふきのとう - 白い冬  ",
+"フラワーカンパニーズ - 夜明け  ",
+"ブリキノダンス 日向電工",
+"プレイバック Part2  山口百恵",
+"フレンズ - 街  ",
+"ベッツィ&クリス - 白い色は恋人の色  ",
+"ペドロ＆カプリシャス - 愛のプレリュード  ",
+"ポケットビスケッツ - Yellow Yellow Happy  ",
+"ボビー - 炎のたからもの  ",
+"ポプラ - 美女と野獣  ",
+"ポルノグラフィティ - アポロ  ",
+"ポルノグラフィティ - サウダージ  ",
+"ポルノグラフィティ - メリッサ  ",
+"まちぶせ　石川ひとみ（松任谷由実　荒井由実）",
+"まふまふ - 女の子になりたい  ",
+"ミニモニ。 - ミニモニ。ジャンケンぴょん！  ",
+"ムーンライト伝説 DALI",
+"めだかの兄妹　わらべ",
+"メリクリ　BoA",
+"モーニング娘。 - Be Alive  ",
+"モーニング娘。 - I WISH  ",
+"モーニング娘。 - LOVEマシーン  ",
+"モーニング娘。 - Mr.Moonlight ～愛のビッグバンド～  ",
+"モーニング娘。 - ザ☆ピ～ス!  ",
+"モーニング娘。 - サマーナイトタウン  ",
+"モーニング娘。 - でっかい宇宙に愛がある  ",
+"モーニング娘。 - ハッピーサマーウェディング  ",
+"モーニング娘。 - ふるさと  ",
+"モーニング娘。 - モーニング娘。のひょっこりひょうたん島  ",
+"モーニング娘。 - 抱いてHOLD ON ME!  ",
+"モーニング娘。 - 恋のダンスサイト  ",
+"モーニング娘。 - 恋愛レボリューション21  ",
+"ももくろちゃんZ - うれしいひなまつり  ",
+"やさしさで溢れるように Flower",
+"ヤングスキニー - 雪月花  ",
+"ゆうゆ with おニャン子クラブ - 天使のボディーガード  ",
+"ゆず - 栄光の架橋  ",
+"ゆず - 素顔のままで  ",
+"ユトリア 市ノ瀬加那 - おやすみ  ",
+"ユンナ - DIAMONDS  ",
+"ようこそジャパリパークへ　どうぶつビスケッツ☓PPP　　　",
+"ヨルシカ - Make-up Shadow  ",
+"ヨルシカ - あの夏に咲け  ",
+"ヨルシカ - だから僕は音楽を辞めた  ",
+"ヨルシカ - ただ君に晴れ  ",
+"ヨルシカ - ノーチラス  ",
+"ヨルシカ - パレード  ",
+"ヨルシカ - ヒッチコック  ",
+"ヨルシカ - 雨とカプチーノ  ",
+"ヨルシカ - 雨晴るる  ",
+"ヨルシカ - 花に亡霊  ",
+"ヨルシカ - 言って。  ",
+"ヨルシカ - 春泥棒  ",
+"ヨルシカ - 心に穴が空いた  ",
+"ライオン May'n  中島愛",
+"ラッツ&スター - 夢で逢えたら  ",
+"ラピスラズリ 藍井エイル",
+"ラムのラブソング  松谷祐子",
+"ランカ・リー(中島愛) - 私の彼はパイロット  ",
+"レベッカ - LONELY BUTTERFLY  ",
+"レベッカ - MOON  ",
+"レベッカ - OLIVE  ",
+"レベッカ宮本(斎藤千和) - 雪月花  ",
+"レミオロメン - 3月9日  ",
+"レミオロメン - 粉雪  ",
+"ロマンティックあげるよ  橋本潮",
+"わらべ - もしも明日が  ",
+"ワルキューレ - いけないボーダーライン  ",
+"阿部真央 - immorality  ",
+"阿部真央 - ストーカーの唄  ",
+"愛・おぼえていますか　飯島真理",
+"愛が止まらない～Turn It Into Love～　 Wink",
+"愛は吐息のように～TOP GUN LOVE THEME （トップガン）",
+"絢香 - I believe  ",
+"絢香 - Jewelry day  ",
+"絢香 - おかえり  ",
+"絢香 - にじいろ  ",
+"絢香 - みんな空の下  ",
+"絢香 - 三日月  ",
+"絢香 - 恋焦がれて見た夢  ",
+"安室奈美恵 - a walk in the park  ",
+"安室奈美恵 - CAN YOU CELEBRATE  ",
+"安室奈美恵 - Chase the Chance  ",
+"安室奈美恵 - Christmas Wish  ",
+"安室奈美恵 - Finally  ",
+"安室奈美恵 - Hero  ",
+"安室奈美恵 - Love Story  ",
+"安室奈美恵 - NEVER END  ",
+"安室奈美恵 - SWEET 19 BLUES  ",
+"安室奈美恵 - You're my sunshine  ",
+"安室奈美恵 with SUPER MONKEY'S - TRY ME ～私を信じて～  ",
+"安全地帯 - ワインレッドの心  ",
+"安田成美 - 風の谷のナウシカ",
+"安倍なつみ - Too far away  ",
+"杏里 - CAT'S EYE  ",
+"杏里 - 思いきりアメリカン  ",
+"伊東ゆかり - 花のささやき  ",
+"伊藤薫 - ラヴ・イズ・オーヴァー  ",
+"伊藤咲子 - ひまわり娘  ",
+"伊藤由奈 × セリーヌ・ディオン - あなたがいる限り  ",
+"異邦人 久保田早紀",
+"井上あずみ - さんぽ  ",
+"井上苑子 - 点描の唄（ソロver.）  ",
+"井上昌己 & 中西圭三 - 愛が生まれた日  ",
+"井上陽水 - Make-up Shadow",
+"井上陽水 - いっそセレナーデ  ",
+"井上陽水 - ジェラシー  ",
+"井上陽水 - 決められたリズム  ",
+"井上陽水 - 少年時代  ",
+"井上陽水 - 夢  ",
+"井上陽水 - 夢の中へ  ",
+"井上陽水 & 奥田民生 - ありがとう  ",
+"井上陽水・安全地帯 - 夏の終りのハーモニー  ",
+"一青窈 - もらい泣き  ",
+"稲垣潤一 - クリスマスキャロルの頃には  ",
+"陰陽座 - 甲賀忍法帖  ",
+"宇多田ヒカル - A.S.A.P.  ",
+"宇多田ヒカル - Automatic  ",
+"宇多田ヒカル - Beautiful World  ",
+"宇多田ヒカル - Can You Keep A Secret  ",
+"宇多田ヒカル - COLORS  ",
+"宇多田ヒカル - DISTANCE  ",
+"宇多田ヒカル - First Love  ",
+"宇多田ヒカル - Forevermore  ",
+"宇多田ヒカル - Good Night  ",
+"宇多田ヒカル - I LOVE YOU  ",
+"宇多田ヒカル - One Last Kiss  ",
+"宇多田ヒカル - One Night Magic  ",
+"宇多田ヒカル - Play A Love Song  ",
+"宇多田ヒカル - SAKURAドロップス  ",
+"宇多田ヒカル - Too Proud  ",
+"宇多田ヒカル - あなた  ",
+"宇多田ヒカル - 花束を君に  ",
+"宇多田ヒカル - 初恋  ",
+"宇多田ヒカル - 真夏の通り雨  ",
+"宇多田ヒカル - 人魚  ",
+"宇多田ヒカル - 人生最高の日  ",
+"宇野ゆう子 - サザエさん  ",
+"雨音はショパンの調べ 小林麻美",
+"浦島太郎 - 海の声  ",
+"永井真理子 - ZUTTO  ",
+"瑛人 - 香水  ",
+"衛藤利恵 - 天使の微笑  ",
+"園まり - あなたのとりこ  ",
+"猿岩石 - 白い雲のように  ",
+"遠藤正明 - ウルトラセブンの歌  ",
+"遠藤正明 - ペガサス幻想  ",
+"奥村チヨ - 恋の奴隷  ",
+"横浜銀蝿 - ツッパリ High School Rock'n Roll  ",
+"欧陽菲菲 - ラヴ・イズ・オーヴァー  ",
+"岡村孝子 - adieu",
+"岡村孝子 - Baby Baby",
+"岡村孝子 - Believe",
+"岡村孝子 - happy song",
+"岡村孝子 - NO RAIN, NO RAINBOW",
+"岡村孝子 - TODAY",
+"岡村孝子 - Winter Story",
+"岡村孝子 - クリスマスの夜  ",
+"岡村孝子 - と・も・に",
+"岡村孝子 - はぐれそうな天使",
+"岡村孝子 - ピエロ",
+"岡村孝子 - ヒロイン",
+"岡村孝子 - ミストラル～季節風～",
+"岡村孝子 - リフレイン",
+"岡村孝子 - リベルテ",
+"岡村孝子 - 以心伝心",
+"岡村孝子 - 夏の日の午後",
+"岡村孝子 - 女神の微笑み",
+"岡村孝子 - 心の草原",
+"岡村孝子 - 世界中メリークリスマス",
+"岡村孝子 - 星屑に願いを",
+"岡村孝子 - 潮の香りの中で",
+"岡村孝子 - 電車",
+"岡村孝子 - 虹を追いかけて  ",
+"岡村孝子 - 夢の途中",
+"岡村孝子 - 夢をあきらめないで",
+"岡村孝子 - 無敵のキャリア・ガール",
+"岡村孝子 - 明日の風",
+"岡村孝子 - 遥かなる旅路",
+"岡村孝子 - 流星",
+"岡村孝子(あみん) - forever",
+"岡田有希子 - くちびるNetwork  ",
+"岡田有希子 - ファースト・デイト  ",
+"岡本真夜 - サヨナラ  ",
+"岡本真夜 - そのままの君でいて  ",
+"岡本真夜 - 手紙  ",
+"荻野目洋子 - ダンシング・ヒーロー  ",
+"荻野目洋子 - 六本木純情派  ",
+"下成佐登子 - 花のささやき  ",
+"佳山明生 - 氷雨  ",
+"加藤いづみ - この街が好きだよ  ",
+"加藤いづみ - 坂道  ",
+"加藤登紀子 - この空を飛べたら  ",
+"加藤登紀子 - 百万本のバラ  ",
+"加藤和彦・北山修 - あの素晴らしい愛をもう一度  ",
+"夏祭り  Whiteberry(ホワイトベリー)",
+"夏川りみ - てぃんさぐぬ花  ",
+"夏川りみ - なごり雪  ",
+"夏川りみ - ゆりかごのうた  ",
+"夏川りみ - 花  ",
+"夏川りみ - 時代  ",
+"夏川りみ - 島唄  ",
+"夏川りみ - 童神 〜ヤマトグチ〜  ",
+"家入レオ - Silly  ",
+"家入レオ - サブリナ  ",
+"河合奈保子 - エスカレーション  ",
+"河合奈保子 - スマイル・フォー・ミー  ",
+"花_花 - さよなら大好きな人  ",
+"花は咲くプロジェクト - 花は咲く  ",
+"花頭巾 - にっぽん昔ばなし  ",
+"華原朋美 - I BELIEVE  ",
+"華原朋美 - I'm proud  ",
+"華原朋美 - keep yourself alive  ",
+"華原朋美 - 夢やぶれて  ",
+"皆川おさむ - 黒ネコのタンゴ  ",
+"茅根元三・日向しのぶ - この花 この道 この絆  ",
+"寒い夜だから　TRF",
+"岩崎宏美 - Street Dancer  ",
+"岩崎宏美 - いのちの理由  ",
+"岩崎宏美 - ロマンス  ",
+"岩崎宏美 - 思秋期  ",
+"岩崎宏美 - 聖母たちのララバイ  ",
+"岩崎宏美 - 道化師のソネット  ",
+"岩本公水 - しぐれ舟  ",
+"忌野清志郎, 坂本龍一 - いけないルージュマジック  ",
+"菊池桃子 - BOYのテーマ  ",
+"菊池桃子 - 卒業 GRADUATION  ",
+"吉幾三 - 俺ら東京さ行ぐだ  ",
+"吉田美奈子 - 夢で逢えたら  ",
+"久保田利伸 - LA・LA・LA LOVE SONG  ",
+"久宝留理子 - 男  ",
+"久野誠 - 燃えよドラゴンズ!'88  ",
+"郷ひろみ - 2億4千万の瞳  ",
+"郷ひろみ - 哀愁のカサブランカ  ",
+"郷ひろみ - 言えないよ  ",
+"郷ひろみ・松田聖子 - True Love Story  ",
+"暁音 - 心做し  ",
+"玉置浩二 - サーチライト  ",
+"玉置浩二 - しあわせのランプ  ",
+"玉置浩二 - ティンクル  ",
+"玉置浩二 - メロディー  ",
+"玉置浩二 - 遠泳  ",
+"玉置浩二 - 夏の終りのハーモニー  ",
+"玉置浩二 - 田園  ",
+"玉置浩二 - 嘲笑  ",
+"近藤真彦 - スニーカーぶる〜す  ",
+"近藤真彦 - ハイティーン・ブギ  ",
+"金沢明子 - イエロー・サブマリン音頭  ",
+"金曜日のおはよう -another story-   HoneyWorks",
+"串田アキラ - キン肉マンGo Fight!  ",
+"桑田佳祐 - 奇跡の地球  ",
+"桑田佳祐 - 白い恋人達  ",
+"桑田佳祐&Mr.Children - 奇跡の地球  ",
+"君の空へ　EMILY",
+"君の知らない物語　supercell",
+"劇団四季 - オペラ座の怪人  ",
+"結束バンド - 星座になれたら  ",
+"研ナオコ - あばよ  ",
+"研ナオコ - かもめはかもめ  ",
+"研ナオコ - ダンスはうまく踊れない  ",
+"研ナオコ - 夏をあきらめて  ",
+"元ちとせ - ワダツミの木  ",
+"原田真二 - キャンディ  ",
+"原田知世 - ロマンス  ",
+"原田知世 - 愛情物語  ",
+"原田知世 - 時をかける少女  ",
+"原田知世 - 天国にいちばん近い島  ",
+"原田知世 - 彼と彼女のソネット  ",
+"原由子 - ハートせつなく  ",
+"原由子 - 花咲く旅路  ",
+"原由子 - 京都物語  ",
+"原由子 - 少女時代  ",
+"原由子＆稲村オーケストラ - 愛して愛して愛しちゃったのよ  ",
+"古川慎 - 星に願いを  ",
+"五十嵐浩晃 - 夢泥棒  ",
+"五輪真弓 - 恋人よ  ",
+"呉島光実(高杉真宙) - Point Of No Return  ",
+"後藤邑子 - Lはラブリー  ",
+"倖田來未 - Moon Crying  ",
+"倖田來未 - キューティーハニー  ",
+"倖田來未 - 愛のうた  ",
+"倖田來未 - 恋のつぼみ  ",
+"好き　西野カナ",
+"好きになって、よかった  加藤いづみ",
+"工藤静香 - Blue Velvet  ",
+"工藤静香 - FU-JI-TSU  ",
+"工藤静香 - Ice Rain  ",
+"工藤静香 - MUGO・ん…色っぽい  ",
+"工藤静香 - くちびるから媚薬  ",
+"工藤静香 - メタモルフォーゼ  ",
+"工藤静香 - めちゃくちゃに泣いてしまいたい  ",
+"工藤静香 - 黄砂に吹かれて  ",
+"工藤静香 - 禁断のテレパシー  ",
+"工藤静香 - 激情  ",
+"工藤静香 - 千流の雫  ",
+"工藤静香 - 抱いてくれたらいいのに  ",
+"工藤静香 - 命の別名  ",
+"工藤静香 - 嵐の素顔  ",
+"工藤静香 - 恋一夜  ",
+"工藤静香 - 慟哭  ",
+"広瀬香美 - DEAR...Again  ",
+"広瀬香美 - promise  ",
+"広瀬香美 - ゲレンデがとけるほど恋したい  ",
+"広瀬香美 - ストロボ  ",
+"広瀬香美 - ピアニシモ  ",
+"広瀬香美 - ロマンスの神様  ",
+"広瀬香美 - 愛があれば大丈夫  ",
+"広瀬香美 - 幸せになりたい  ",
+"広畑あつみ - 捨てられて  ",
+"広末涼子 - MajiでKoiする5秒前  ",
+"広末涼子 - 大スキ!  ",
+"弘田三枝子 - 人形の家  ",
+"甲賀忍法帖-陰陽座 こうがにんぽう（おんみょうざ)",
+"紅　X",
+"荒井由実 - 翳りゆく部屋  ",
+"香西かおり - 無言坂  ",
+"高岡早紀 - 眠れぬ森の美女  ",
+"高橋真梨子 - あなたの空を翔びたい  ",
+"高橋真梨子 - 別れの朝  ",
+"高橋真梨子 - 遥かな人へ  ",
+"高橋由美子 - だいすき  ",
+"高橋洋子 - FLY ME TO THE MOON  ",
+"高橋洋子 - 魂のルフラン  ",
+"高橋洋子 - 残酷な天使のテーゼ  ",
+"高橋洋樹 - 魔訶不思議アドベンチャー!  ",
+"高樹澪 - ダンスはうまく踊れない  ",
+"高田みづえ - 潮騒のメロディー  ",
+"高木麻早 - 想い出が多すぎて  ",
+"国生さゆり - バレンタイン・キッス",
+"国生さゆり with おニャン子クラブ - バレンタイン・キッス",
+"国武万里 - ポケベルが鳴らなくて  ",
+"今井美樹 - Martiniqueの海風  ",
+"今井美樹 - オレンジの河  ",
+"今井美樹 - ルパン三世 愛のテーマ  ",
+"今井美樹 - 空に近い週末  ",
+"今井美樹 - 野性の風  ",
+"細川たかし - 望郷じょんから  ",
+"財津和夫 - 切手のないおくりもの  ",
+"坂東玉三郎 - アマリア  ",
+"坂道AKB - 国境のない時代  ",
+"坂道AKB - 初恋ドア  ",
+"坂道AKB - 誰のことを一番 愛してる  ",
+"坂本九 - レットキス  ",
+"坂本九 - 見上げてごらん夜の星を  ",
+"坂本九 - 幸せなら手をたたこう  ",
+"坂本九 - 涙くんさよなら  ",
+"坂本真綾 - トライアングラー  ",
+"坂本冬美 - さらばシベリア鉄道  ",
+"坂本冬美 - 越冬つばめ  ",
+"坂本冬美 - 火の国の女  ",
+"坂本冬美 - 蛍草  ",
+"坂本冬美 - 人生いろいろ  ",
+"坂本美雨 - 彼と彼女のソネット  ",
+"坂本龍一 featuring SisterM - The Other Side of Love  ",
+"阪神タイガース - 六甲おろし  ",
+"桜高軽音部 - Don't say lazy  ",
+"桜田淳子 - 気まぐれヴィーナス  ",
+"桜田淳子 - 追いかけてヨコハマ  ",
+"三山ひろし - 東京五輪音頭  ",
+"三宅由佳莉 - ユー・レイズ・ミー・アップ  ",
+"山下達郎 - クリスマス・イブ  ",
+"山口百恵 - 1 2 3  ",
+"山口百恵 - 15才の恋  ",
+"山口百恵 - A GOLD NEEDLE AND SILVER THREAD  ",
+"山口百恵 - AIR MAIL  ",
+"山口百恵 - BACK TO BACK  ",
+"山口百恵 - BLACK CAB  ",
+"山口百恵 - CHECK OUT LOVE  ",
+"山口百恵 - COSMOS  ",
+"山口百恵 - Crazy Love  ",
+"山口百恵 - SEINEより愛をこめて  ",
+"山口百恵 - SPACE OPERA  ",
+"山口百恵 - This is my trial  ",
+"山口百恵 - TIME TRAVEL  ",
+"山口百恵 - WIND & WINDOW  ",
+"山口百恵 - あなたが死んだら  ",
+"山口百恵 - あなたへの子守唄  ",
+"山口百恵 - あのひと  ",
+"山口百恵 - アポカリプス・ラブ  ",
+"山口百恵 - あやつり人形館  ",
+"山口百恵 - ありがとう あなた  ",
+"山口百恵 - ある1ページ  ",
+"山口百恵 - いい日旅立ち  ",
+"山口百恵 - イノセント  ",
+"山口百恵 - いま目覚めた子供のように  ",
+"山口百恵 - イミテイション・ゴールド  ",
+"山口百恵 - イントロダクション・春  ",
+"山口百恵 - ヴァイオレット・ラプソディー  ",
+"山口百恵 - おかしな恋人  ",
+"山口百恵 - おだやかな構図  ",
+"山口百恵 - オレンジ・ブロッサム・ブルース  ",
+"山口百恵 - お月様の下で  ",
+"山口百恵 - お元気ですか  ",
+"山口百恵 - ささやかな欲望  ",
+"山口百恵 - さよならの季節  ",
+"山口百恵 - さよならの向う側  ",
+"山口百恵 - サンタマリアの熱い風  ",
+"山口百恵 - しなやかに歌って  ",
+"山口百恵 - シニカル  ",
+"山口百恵 - シュルード・フェロー  ",
+"山口百恵 - スキャンダル  ",
+"山口百恵 - スター誕生 AGAIN  ",
+"山口百恵 - センチメンタル・ハリケーン  ",
+"山口百恵 - そして出逢い  ",
+"山口百恵 - タイトスカート  ",
+"山口百恵 - たそがれ祭り  ",
+"山口百恵 - ただよいの中で  ",
+"山口百恵 - ちっぽけな感傷  ",
+"山口百恵 - デイ・ドゥリーム  ",
+"山口百恵 - テクノ・パラダイス  ",
+"山口百恵 - としごろ  ",
+"山口百恵 - ともだちそれとも妹  ",
+"山口百恵 - ドライフラワー  ",
+"山口百恵 - のぞきからくり  ",
+"山口百恵 - パールカラーにゆれて  ",
+"山口百恵 - バケイション  ",
+"山口百恵 - バラの誘惑  ",
+"山口百恵 - ひとりぼっちのあなた  ",
+"山口百恵 - ヒロイン  ",
+"山口百恵 - ふたりに春が  ",
+"山口百恵 - プレイバック Part 2  ",
+"山口百恵 - プレイバック Part1  ",
+"山口百恵 - ペイパー・ドリーム  ",
+"山口百恵 - ボーイハント  ",
+"山口百恵 - ほほえみのむこう側  ",
+"山口百恵 - まばたきの夏  ",
+"山口百恵 - まぶしい視線  ",
+"山口百恵 - マホガニー・モーニング  ",
+"山口百恵 - めまいの季節  ",
+"山口百恵 - モノトーンの肖像画  ",
+"山口百恵 - ラスト・ソング  ",
+"山口百恵 - レモンのキッス  ",
+"山口百恵 - ロックンロール・ウィドウ  ",
+"山口百恵 - わたしの悩み 誰も知らない  ",
+"山口百恵 - わたしの彼は左きき  ",
+"山口百恵 - ワン・ステップ・ビヨンド  ",
+"山口百恵 - 哀愁のコニーアイランド  ",
+"山口百恵 - 愛がひとつあれば  ",
+"山口百恵 - 愛に走って  ",
+"山口百恵 - 愛のTWILIGHT TIME  ",
+"山口百恵 - 愛の行方  ",
+"山口百恵 - 愛の暮色  ",
+"山口百恵 - 愛の嵐  ",
+"山口百恵 - 愛染橋  ",
+"山口百恵 - 或る女…或る日  ",
+"山口百恵 - 闇の薫り  ",
+"山口百恵 - 伊豆の踊子  ",
+"山口百恵 - 一恵  ",
+"山口百恵 - 宇宙旅行のパンフレット  ",
+"山口百恵 - 雨に願いを  ",
+"山口百恵 - 雨に濡れた少女  ",
+"山口百恵 - 噂の少女  ",
+"山口百恵 - 炎の前で  ",
+"山口百恵 - 横須賀サンセット・サンライズ  ",
+"山口百恵 - 横須賀ストーリー  ",
+"山口百恵 - 乙女の祈り  ",
+"山口百恵 - 乙女座宮  ",
+"山口百恵 - 可愛いベイビー  ",
+"山口百恵 - 夏ひらく青春  ",
+"山口百恵 - 歌い継がれてゆく歌のように  ",
+"山口百恵 - 花筆文字  ",
+"山口百恵 - 海の友達  ",
+"山口百恵 - 乾いた唇  ",
+"山口百恵 - 感じる季節  ",
+"山口百恵 - 感傷旅行  ",
+"山口百恵 - 軌道修正  ",
+"山口百恵 - 教室を出たら大人  ",
+"山口百恵 - 禁じられた遊び  ",
+"山口百恵 - 銀河カフェテラス  ",
+"山口百恵 - 銀色のジプシー  ",
+"山口百恵 - 喰べられてしまった貘  ",
+"山口百恵 - 空はこんなに青い  ",
+"山口百恵 - 空蝉  ",
+"山口百恵 - 幻へようこそ  ",
+"山口百恵 - 個人授業  ",
+"山口百恵 - 湖の決心  ",
+"山口百恵 - 口約束  ",
+"山口百恵 - 最後の頁  ",
+"山口百恵 - 昨日までの顔  ",
+"山口百恵 - 山鳩  ",
+"山口百恵 - 謝肉祭  ",
+"山口百恵 - 秋桜  ",
+"山口百恵 - 春に吹かれて  ",
+"山口百恵 - 春の奇跡  ",
+"山口百恵 - 春の奇蹟  ",
+"山口百恵 - 春風のいたずら  ",
+"山口百恵 - 春爛漫  ",
+"山口百恵 - 初恋のひと  ",
+"山口百恵 - 初恋時代  ",
+"山口百恵 - 初恋草紙  ",
+"山口百恵 - 少女の誇り  ",
+"山口百恵 - 少年の海  ",
+"山口百恵 - 新しい地図  ",
+"山口百恵 - 神様のおぼし召し  ",
+"山口百恵 - 水鏡  ",
+"山口百恵 - 水曜日のクオレ  ",
+"山口百恵 - 清潔な恋  ",
+"山口百恵 - 青い果実  ",
+"山口百恵 - 惜春通り  ",
+"山口百恵 - 赤い運命  ",
+"山口百恵 - 赤い衝撃  ",
+"山口百恵 - 赤い絆  ",
+"山口百恵 - 絶体絶命  ",
+"山口百恵 - 喪服さがし  ",
+"山口百恵 - 想い出のストロベリーフィールズ  ",
+"山口百恵 - 想い出のミラージュ  ",
+"山口百恵 - 草原の輝き  ",
+"山口百恵 - 走れ風と共に  ",
+"山口百恵 - 太陽の友達  ",
+"山口百恵 - 大人になりたい  ",
+"山口百恵 - 嘆きのサブウェイ  ",
+"山口百恵 - 中学三年生  ",
+"山口百恵 - 朝陽の庭  ",
+"山口百恵 - 賭け  ",
+"山口百恵 - 冬の色  ",
+"山口百恵 - 猫が見ている  ",
+"山口百恵 - 燃える海  ",
+"山口百恵 - 悩み多い14才  ",
+"山口百恵 - 白い約束  ",
+"山口百恵 - 悲しき16才  ",
+"山口百恵 - 悲しきドラマー・マン  ",
+"山口百恵 - 美・サイレント",
+"山口百恵 - 美え貝  ",
+"山口百恵 - 不死鳥伝説  ",
+"山口百恵 - 文通  ",
+"山口百恵 - 碧色の瞳  ",
+"山口百恵 - 抱きしめられて  ",
+"山口百恵 - 放課後  ",
+"山口百恵 - 幕間の風景  ",
+"山口百恵 - 夢の恋人  ",
+"山口百恵 - 夢先案内人  ",
+"山口百恵 - 霧雨楼  ",
+"山口百恵 - 娘たち  ",
+"山口百恵 - 曼珠沙華  ",
+"山崎育三郎 - ひまわりの約束  ",
+"山本リンダ - どうにもとまらない  ",
+"指原莉乃 - それでも好きだよ  ",
+"指田郁也 - 花になれ  ",
+"糸　中島みゆき",
+"紙ふうせん - 冬が来る前に  ",
+"紙ふうせん - 翼をください  ",
+"寺岡呼人 - およげ！たいやきくん  ",
+"篠原美也子 - 夢を見ていた  ",
+"篠原涼子 - Lady Generation  ",
+"篠原涼子 with t.komuro - もっと もっと…  ",
+"篠原涼子 with t.komuro - 恋しさと せつなさと 心強さと  ",
+"篠田麻里子 - プラスティックの唇  ",
+"柴咲コウ - 月のしずく  ",
+"柴田まゆみ - 白いページの中に  ",
+"手紙 ～拝啓 十五の君へ～　アンジェラ・アキ",
+"手嶌葵 - Over The Rainbow  ",
+"手嶌葵 - エスケープ  ",
+"手嶌葵 - さよならの夏  ",
+"手嶌葵 - ただいま  ",
+"手嶌葵 - ちょっとしたもの  ",
+"手嶌葵 - テルーの唄  ",
+"手嶌葵 - 雨  ",
+"手嶌葵 - 明日への手紙  ",
+"手嶌葵 - 旅人  ",
+"狩人 - あずさ2号  ",
+"酒井司優子, 東京放送児童合唱団 - コンピューターおばあちゃん  ",
+"酒井法子 - 鏡のドレス  ",
+"酒井法子 - 世界中の誰よりきっと  ",
+"酒井法子 - 碧いうさぎ  ",
+"酒井法子 - 夢冒険  ",
+"秋元順子 - 愛の讃歌  ",
+"秋桜 山口百恵",
+"舟木一夫 - 銭形平次  ",
+"春なのに 柏原芳恵",
+"春よ、来い　 松任谷由実",
+"初音ミク - カメレオン  ",
+"初恋 村下孝蔵",
+"小泉今日子 - あなたに会えてよかった  ",
+"小泉今日子 - なんてったってアイドル  ",
+"小泉今日子 - やさしい悪魔  ",
+"小泉今日子 - ヤマトナデシコ七変化  ",
+"小泉今日子 - 艶姿ナミダ娘  ",
+"小泉今日子 - 月ひとしずく  ",
+"小泉今日子 - 渚のはいから人魚  ",
+"小泉今日子 - 魔女  ",
+"小泉今日子 - 迷宮のアンドローラ  ",
+"小泉今日子 - 木枯しに抱かれて  ",
+"小泉今日子 - 夜明けのMEW  ",
+"小比類巻かほる - CITY HUNTER ～愛よ消えないで～  ",
+"小林明子 - 恋におちて  ",
+"庄野真代 - 飛んでイスタンブール  ",
+"松たか子 - レット・イット・ゴー ありのままで  ",
+"松たか子 - 明日、春が来たら  ",
+"松たか子 - 明日はどこから  ",
+"松浦亜弥 - GOOD BYE 夏男  ",
+"松浦亜弥 - LOVE涙色",
+"松浦亜弥 - Yeah! めっちゃホリディ  ",
+"松浦亜弥 - 桃色片想い  ",
+"松原みき - 真夜中のドア Stay With Me  ",
+"松田聖子 - Gone with the rain  ",
+"松田聖子 - LOVE  ",
+"松田聖子 - Marrakech  ",
+"松田聖子 - PEARL-WHITE EVE  ",
+"松田聖子 - あなたのすべてになりたい  ",
+"松田聖子 - あなたのその胸に  ",
+"松田聖子 - あなたを、愛したこと  ",
+"松田聖子 - さよならの瞬間  ",
+"松田聖子 - とんがり屋根の花屋さん  ",
+"松田聖子 - マンハッタンでブレックファスト  ",
+"松田聖子 - 逢いたい  ",
+"松田聖子 - 雨のコニー・アイランド  ",
+"松田聖子 - 永遠のもっと果てまで  ",
+"松田聖子 - 花一色～野菊のささやき～  ",
+"松田聖子 - 白い恋人  ",
+"松田聖子 - 裏庭のガレージで抱きしめて  ",
+"松田聖子メドレー1",
+"松田聖子メドレー2",
+"松任谷由実  - ANNIVERSARY ～無限にCALLING YOU～ ",
+"松任谷由実 - 「いちご白書」をもう一度  ",
+"松任谷由実 - ANNIVERSARY  ",
+"松任谷由実 - BLIZZARD  ",
+"松任谷由実 - DESTINY  ",
+"松任谷由実 - あの日にかえりたい  ",
+"松任谷由実 - サーフ天国、スキー天国  ",
+"松任谷由実 - シンデレラ・エクスプレス  ",
+"松任谷由実 - ノーサイド  ",
+"松任谷由実 - やさしさに包まれたなら  ",
+"松任谷由実 - リフレインが叫んでる  ",
+"松任谷由実 - ルージュの伝言  ",
+"松任谷由実 - 時のカンツォーネ  ",
+"松任谷由実 - 時をかける少女  ",
+"松任谷由実 - 守ってあげたい  ",
+"松任谷由実 - 卒業写真  ",
+"松任谷由実 - 中央フリーウェイ  ",
+"松任谷由実 - 埠頭を渡る風  ",
+"松任谷由実 - 恋人がサンタクロース  ",
+"松任谷由実 - 翳りゆく部屋  ",
+"松任谷由実, 小田和正, 財津和夫 - 今だから  ",
+"硝子のプリズム　松田聖子",
+"障子久美 - あの頃のように  ",
+"上白石萌音 - なんでもないや  ",
+"上白石萌音 - 夜明けをくちずさめたら  ",
+"織田哲郎 - いつまでも変わらぬ愛を  ",
+"新田恵利 - 冬のオペラグラス  ",
+"森口博子 - 水の星へ愛をこめて  ",
+"森高千里 - GET SMILE  ",
+"森高千里 - NEW SEASON  ",
+"森高千里 - SO BLUE  ",
+"森高千里 - ジン ジン ジングルベル  ",
+"森高千里 - ハエ男  ",
+"森高千里 - ララ サンシャイン  ",
+"森高千里 - ロックン・オムレツ  ",
+"森高千里 - ロックンロール県庁所在地  ",
+"森高千里 - 夏の日  ",
+"森高千里 - 海まで5分  ",
+"森高千里 - 気分爽快  ",
+"森高千里 - 私の夏  ",
+"森高千里 - 青い海  ",
+"森高千里 - 素敵な誕生日  ",
+"森高千里 - 道  ",
+"森高千里 - 勉強の歌  ",
+"森山直太朗 - さくら  ",
+"森山良子 - さとうきび畑  ",
+"森山良子 - 涙そうそう  ",
+"森昌子 - 哀しみ本線日本海  ",
+"森昌子 - 越冬つばめ  ",
+"森川美穂 - ブルーウォーター",
+"神威がくぽ・鏡音レン・KAITO - 明治生まれのロックンローラー  ",
+"神田沙也加 - ever since  ",
+"神田沙也加・稲葉菜月・諸星すみれ - 雪だるまつくろう  ",
+"神田沙也加・松たか子 - 生まれてはじめて  ",
+"神田沙也加, 津田英佑 - とびら開けて  ",
+"秦基博 - ひまわりの約束  ",
+"辛島美登里 - それぞれのメリー・クリスマス  ",
+"辛島美登里 - 愛すること  ",
+"水樹奈々 - DISCOTHEQUE  ",
+"菅田将暉 - 7.1oz  ",
+"菅田将暉 - キスだけで  ",
+"菅田将暉 - さよならエレジー  ",
+"菅田将暉 - ばかになっちゃったのかな  ",
+"菅田将暉 - まちがいさがし  ",
+"菅田将暉 - ラストシーン  ",
+"菅田将暉 - ロングホープ・フィリア  ",
+"菅田将暉 - 雨が上がる頃に  ",
+"菅田将暉 - 見たこともない景色  ",
+"菅田将暉 - 呼吸  ",
+"菅田将暉 - 星を仰ぐ  ",
+"菅田将暉 - 虹  ",
+"世界中の誰よりきっと 中山美穂＆WANDS",
+"星間飛行 ランカ・リー＝中島愛",
+"星野源 - 喜劇  ",
+"清水翔太 - 白い恋人達  ",
+"清水翔太×加藤ミリヤ - FOREVER LOVE  ",
+"生田絵梨花 - あなたのために弾きたい  ",
+"生田絵梨花 - 命の真実  ",
+"聖飢魔II - 蝋人形の館  ",
+"西城秀樹 - YOUNG MAN  ",
+"西内まりや - ありがとうForever...  ",
+"西野カナ - Best Friend  ",
+"西野カナ - Darling  ",
+"西野カナ - Dear Bride  ",
+"西野カナ - if  ",
+"西野カナ - No.1  ",
+"西野カナ - トリセツ",
+"西野カナ - もしも運命の人がいるのなら  ",
+"西野カナ - 君って  ",
+"西野カナ - 好き  ",
+"西野七瀬 - ひとりよがり  ",
+"青山テルマ feat.SoulJa - そばにいるね  ",
+"斉藤由貴 - 初戀  ",
+"斉藤由貴 - 卒業  ",
+"斉藤由貴 - 白い炎  ",
+"斉藤由貴 - 悲しみよこんにちは  ",
+"斉藤由貴 - 夢の中へ  ",
+"斉藤和義 - ウエディング・ソング  ",
+"斉藤和義 - ずっと好きだった  ",
+"斉藤和義 - ワンモアタイム  ",
+"斉藤和義 - 歌うたいのバラッド  ",
+"斉藤和義 - 猫の毛  ",
+"斉藤和義 - 歩いて帰ろう  ",
+"石井明美 - CHA-CHA-CHA  ",
+"石井明美 - Joy  ",
+"石川さゆり - こゝろ花  ",
+"石川さゆり - てぃんさぐぬ花  ",
+"石川さゆり - 大阪つばめ  ",
+"石川さゆり - 能登半島  ",
+"石川ひとみ - あなたの天使  ",
+"石川ひとみ - 君は輝いて天使にみえた  ",
+"石川進 - オバケのQ太郎  ",
+"石川優子とチャゲ - ふたりの愛ランド  ",
+"石田燿子 - Sugar Baby Love  ",
+"石田燿子 - ペガサス幻想  ",
+"石野真子 - 狼なんか怖くない  ",
+"石嶺聡子 - 花  ",
+"赤い鳥 - 翼をください  ",
+"赤道小町ドキッ　山下久美子",
+"雪の華 中島美嘉",
+"千賀かほる - 真夜中のギター  ",
+"千本桜 feat.初音ミク",
+"千本桜　和楽器バンド",
+"川崎鷹也 - 魔法の絨毯  ",
+"川中美幸 - ふたり酒  ",
+"川中美幸 - 遣らずの雨  ",
+"川中美幸 - 二輪草  ",
+"川嶋あい - 旅立ちの日に…",
+"川本真琴 - 愛の才能  ",
+"川﨑麻世 - 夢泥棒  ",
+"泉谷しげる - ゲゲゲの鬼太郎  ",
+"前川陽子 - ひょっこりひょうたん島  ",
+"前川陽子 - 魔女っ子メグちゃん  ",
+"前川陽子・こおろぎ'73 - あの子はあさりちゃん  ",
+"素敵な誕生日 森高千里　EMILYバージョン　2023",
+"創聖のアクエリオン AKINO",
+"倉橋ルイ子 - LOVE IS OVER  ",
+"倉木麻衣 - Feel fine!  ",
+"倉木麻衣 - Love, Day After Tomorrow  ",
+"倉木麻衣 - Reach for the sky  ",
+"倉木麻衣 - Stay by my side  ",
+"倉木麻衣 - Winter Bells  ",
+"奏(かなで)  スキマスイッチ",
+"早見優 - 夏色のナンシー  ",
+"相川七瀬 - BREAK OUT!  ",
+"相川七瀬 - いつまでも変わらぬ愛を  ",
+"相川七瀬 - 夢見る少女じゃいられない  ",
+"相川七瀬 - 恋心  ",
+"側にいて　阿部真央",
+"卒業写真　松任谷由実",
+"太田裕美 - さらばシベリア鉄道  ",
+"待つわ　あみん",
+"泰葉 - フライディ・チャイナタウン  ",
+"黛ジュン - 天使の誘惑  ",
+"大貫妙子 - メトロポリタン美術館  ",
+"大橋純子 - シルエット・ロマンス  ",
+"大原櫻子 - Over The Rainbow  ",
+"大原櫻子 - サンキュー。  ",
+"大原櫻子 - それだけでいい  ",
+"大原櫻子 - ちっぽけな愛のうた  ",
+"大原櫻子 - ひらり  ",
+"大原櫻子 - ワンダフル・ワールド  ",
+"大原櫻子 - 泣きたいくらい  ",
+"大原櫻子 - 大好き  ",
+"大原櫻子 - 瞳  ",
+"大黒摩季 - あなただけ見つめてる  ",
+"大黒摩季 - ら・ら・ら  ",
+"大黒摩季 - 夏が来る  ",
+"大山のぶ代 - ドラえもんのうた  ",
+"大杉久美子 - 草原のマルコ  ",
+"大滝詠一 - 夢で逢えたら  ",
+"大塚愛 - end and and〜10,000 hearts〜  ",
+"大塚愛 - SMILY  ",
+"大塚愛 - サクラハラハラ  ",
+"大塚愛 - さくらんぼ  ",
+"大塚愛 - タイムマシーン  ",
+"大塚愛 - プラネタリウム  ",
+"大塚愛 - ポンポン  ",
+"大塚愛 - 金魚花火  ",
+"大塚愛 - 黒毛和牛上塩タン焼680円  ",
+"大塚愛 - 黒毛和牛上塩タン焼735円  ",
+"大塚愛 - 濡れる花  ",
+"滝口順平 - ゲゲゲの鬼太郎  ",
+"沢田研二 - 君をのせて  ",
+"沢田知可子 - 会いたい  ",
+"辰巳真理恵 - 私のお父さん  ",
+"谷村新司 - 昴  ",
+"池田彩 - キボウレインボウ  ",
+"竹内まりや - Forever Friends  ",
+"竹内まりや - September  ",
+"竹内まりや - いのちの歌  ",
+"竹内まりや - カムフラージュ  ",
+"竹内まりや - けんかをやめて  ",
+"竹内まりや - シングル・アゲイン  ",
+"竹内まりや - すてきなホリデイ  ",
+"竹内まりや - ドリーム・オブ・ユー  ",
+"竹内まりや - ファースト・デイト  ",
+"竹内まりや - プラスティック・ラブ  ",
+"竹内まりや - マンハッタン・キス  ",
+"竹内まりや - もう一度  ",
+"竹内まりや - リンダ  ",
+"竹内まりや - 駅  ",
+"竹内まりや - 家に帰ろう  ",
+"竹内まりや - 元気を出して  ",
+"竹内まりや - 告白  ",
+"竹内まりや - 今夜はHearty Party  ",
+"竹内まりや - 純愛ラプソディ  ",
+"竹内まりや - 真夜中のナイチンゲール  ",
+"竹内まりや - 人生の扉  ",
+"竹内まりや - 天使のため息  ",
+"竹内まりや - 不思議なピーチパイ  ",
+"竹内まりや - 本気でオンリーユー  ",
+"竹内まりや - 恋の嵐  ",
+"中原理恵 - 東京ららばい  ",
+"中孝介 - 花  ",
+"中山美穂 - 「C」  ",
+"中山美穂 - 50/50  ",
+"中山美穂 - CATCH ME  ",
+"中山美穂 - CHEERS FOR YOU  ",
+"中山美穂 - ROSECOLOR  ",
+"中山美穂 - Sweetest Lover  ",
+"中山美穂 - WAKU WAKUさせて  ",
+"中山美穂 - ツイてるね ノッてるね  ",
+"中山美穂 - 遠い街のどこかで  ",
+"中山美穂 - 色・ホワイトブレンド  ",
+"中山美穂 - 派手!!!  ",
+"中条きよし - うそ  ",
+"中森明菜 - 1_2の神話  ",
+"中森明菜 - 22才の別れ  ",
+"中森明菜 - AGAIN  ",
+"中森明菜 - AL-MAUJ  ",
+"中森明菜 - ALONE  ",
+"中森明菜 - APPETITE  ",
+"中森明菜 - APRIL STARS  ",
+"中森明菜 - BLONDE  ",
+"中森明菜 - Blue On Pink  ",
+"中森明菜 - CARIBBEAN  ",
+"中森明菜 - Close Your Eyes  ",
+"中森明菜 - CRYSTAL HEAVEN  ",
+"中森明菜 - Days  ",
+"中森明菜 - Days  ",
+"中森明菜 - Dear Friend  ",
+"中森明菜 - DESIRE -情熱-  ",
+"中森明菜 - DIVA  ",
+"中森明菜 - Everlasting Love  ",
+"中森明菜 - FAREWELL  ",
+"中森明菜 - FIRE STARTER ",
+"中森明菜 - FIXER -WHILE THE WOMEN ARE SLEEPING-  ",
+"中森明菜 - GAME  ",
+"中森明菜 - garnet  ",
+"中森明菜 - Heartbreak  ",
+"中森明菜 - I hope so  ",
+"中森明菜 - I LOVE YOU  ",
+"中森明菜 - I MISSED THE SHOCK  ",
+"中森明菜 - LA BOHEME  ",
+"中森明菜 - La Vida  ",
+"中森明菜 - LIAR  ",
+"中森明菜 - MIND GAME  ",
+"中森明菜 - MOONLIGHT SHADOW ～月に吠えろ  ",
+"中森明菜 - Necessary  ",
+"中森明菜 - October Storm −十月の嵐−  ",
+"中森明菜 - OH NO, OH YES!  ",
+"中森明菜 - Rojo -Tierra-  ",
+"中森明菜 - Rose Bud  ",
+"中森明菜 - SAND BEIGE −砂漠へ−  ",
+"中森明菜 - Shangrila  ",
+"中森明菜 - SO LONG  ",
+"中森明菜 - SOLITUDE  ",
+"中森明菜 - TANGO NOIR  ",
+"中森明菜 - TATTOO  ",
+"中森明菜 - The Heat～musica fiesta～  ",
+"中森明菜 - Tokyo Rose  ",
+"中森明菜 - unfixable  ",
+"中森明菜 - あゝ無情  ",
+"中森明菜 - アサイラム  ",
+"中森明菜 - アデュー  ",
+"中森明菜 - あなたのポートレート  ",
+"中森明菜 - あの夏の日  ",
+"中森明菜 - ありふれた風景  ",
+"中森明菜 - アレグロ・ビヴァーチェ  ",
+"中森明菜 - いい日旅立ち  ",
+"中森明菜 - いちご白書をもう一度  ",
+"中森明菜 - ヴィーナス誕生  ",
+"中森明菜 - うつつの花  ",
+"中森明菜 - エキゾティカ  ",
+"中森明菜 - オフェリア  ",
+"中森明菜 - カタストロフィの雨傘  ",
+"中森明菜 - これからNaturally  ",
+"中森明菜 - こんなにも…。  ",
+"中森明菜 - サウダージ  ",
+"中森明菜 - サザン・ウインド  ",
+"中森明菜 - サザンウインド  ",
+"中森明菜 - さよならじゃ終わらない  ",
+"中森明菜 - さよならね  ",
+"中森明菜 - さよならをするために  ",
+"中森明菜 - ジプシー・クイーン  ",
+"中森明菜 - シングル・アゲイン  ",
+"中森明菜 - ステキな恋の忘れ方  ",
+"中森明菜 - ストライプ  ",
+"中森明菜 - スローなブギにしてくれ  ",
+"中森明菜 - スローモーション  ",
+"中森明菜 - セカンド・ラブ  ",
+"中森明菜 - セカンド・ラブ  ",
+"中森明菜 - ダウンタウンすと～り～  ",
+"中森明菜 - ダンスはうまく踊れない  ",
+"中森明菜 - チャイナタウン  ",
+"中森明菜 - とまどい  ",
+"中森明菜 - ドラマティック・エアポート  ",
+"中森明菜 - トワイライト −夕暮れ便り−  ",
+"中森明菜 - なごり雪  ",
+"中森明菜 - ノンフィクションエクスタシー  ",
+"中森明菜 - ハナミズキ  ",
+"中森明菜 - バレリーナ  ",
+"中森明菜 - ひらり -SAKURA-  ",
+"中森明菜 - ピンク・シャンパン  ",
+"中森明菜 - ベルベット・イースター  ",
+"中森明菜 - まぶしい二人で  ",
+"中森明菜 - マリオネット  ",
+"中森明菜 - ミ・アモーレ  ",
+"中森明菜 - ミック・ジャガーに微笑みを  ",
+"中森明菜 - ムーンライト・レター  ",
+"中森明菜 - メルヘン・ロケーション  ",
+"中森明菜 - モナムール  ",
+"中森明菜 - やさしいキスをして  ",
+"中森明菜 - ヨコハマ A・KU・MA  ",
+"中森明菜 - リ・フ・レ・イ・ン  ",
+"中森明菜 - ルネサンス−優しさで変えて−  ",
+"中森明菜 - ロマンティックな夜だわ  ",
+"中森明菜 - ロンリー・ジャーニー  ",
+"中森明菜 - わかって下さい  ",
+"中森明菜 - わくらば色の風  ",
+"中森明菜 - 哀愁魔術  ",
+"中森明菜 - 愛はかげろう  ",
+"中森明菜 - 愛染橋  ",
+"中森明菜 - 愛撫  ",
+"中森明菜 - 逢いたくて逢いたくて  ",
+"中森明菜 - 悪女  ",
+"中森明菜 - 伊勢佐木町ブルース  ",
+"中森明菜 - 異邦人  ",
+"中森明菜 - 雨が降ってた…  ",
+"中森明菜 - 雨の御堂筋  ",
+"中森明菜 - 雨の物語  ",
+"中森明菜 - 雨月  ",
+"中森明菜 - 駅  ",
+"中森明菜 - 越冬つばめ  ",
+"中森明菜 - 黄昏のビギン  ",
+"中森明菜 - 乙女のワルツ  ",
+"中森明菜 - 夏はざま  ",
+"中森明菜 - 花よ踊れ  ",
+"中森明菜 - 覚悟の秋  ",
+"中森明菜 - 学生街の喫茶店  ",
+"中森明菜 - 感傷紀行  ",
+"中森明菜 - 危ないMON AMOUR  ",
+"中森明菜 - 帰省  ",
+"中森明菜 - 鏡の中のJ  ",
+"中森明菜 - 禁区  ",
+"中森明菜 - 銀河伝説  ",
+"中森明菜 - 月華  ",
+"中森明菜 - 月夜のヴィーナス  ",
+"中森明菜 - 原始、女は太陽だった  ",
+"中森明菜 - 黒薔薇  ",
+"中森明菜 - 今夜、流れ星  ",
+"中森明菜 - 最後のカルメン  ",
+"中森明菜 - 咲きほこる花に…  ",
+"中森明菜 - 桜  ",
+"中森明菜 - 傘がない  ",
+"中森明菜 - 残酷な天使のテーゼ  ",
+"中森明菜 - 思秋期  ",
+"中森明菜 - 時にはアンニュイ  ",
+"中森明菜 - 謝肉祭  ",
+"中森明菜 - 秋桜  ",
+"中森明菜 - 十戒  ",
+"中森明菜 - 初めて出逢った日のように  ",
+"中森明菜 - 小悪魔  ",
+"中森明菜 - 少しだけスキャンダル  ",
+"中森明菜 - 少女A  ",
+"中森明菜 - 飾りじゃないのよ涙は  ",
+"中森明菜 - 色彩のブルース  ",
+"中森明菜 - 水に挿した花  ",
+"中森明菜 - 精霊流し  ",
+"中森明菜 - 脆い午後  ",
+"中森明菜 - 石狩挽歌  ",
+"中森明菜 - 赤い花  ",
+"中森明菜 - 赤い鳥逃げた  ",
+"中森明菜 - 赤い不思議  ",
+"中森明菜 - 赤のエナメル  ",
+"中森明菜 - 窓  ",
+"中森明菜 - 他人の関係  ",
+"中森明菜 - 地平線  ",
+"中森明菜 - 痛い恋をした  ",
+"中森明菜 - 難破船  ",
+"中森明菜 - 二人静  ",
+"中森明菜 - 白い迷い  ",
+"中森明菜 - 非情のライセンス  ",
+"中森明菜 - 氷雨  ",
+"中森明菜 - 忘れて…  ",
+"中森明菜 - 北ウイング  ",
+"中森明菜 - 魔法の鏡  ",
+"中森明菜 - 夢のふち  ",
+"中森明菜 - 夢を見させて…  ",
+"中森明菜 - 目をとじて小旅行  ",
+"中森明菜 - 夜のどこかで  ",
+"中森明菜 - 約束  ",
+"中森明菜 - 予感  ",
+"中森明菜 - 踊り子  ",
+"中森明菜 - 陽炎  ",
+"中森明菜 - 落花流水  ",
+"中森明菜 - 乱火  ",
+"中森明菜 - 瑠璃色の夜へ  ",
+"中森明菜 - 恋の季節  ",
+"中森明菜 - 恋の予感  ",
+"中森明菜 - 恋人のいる時間  ",
+"中森明菜 - 燠火  ",
+"中森明菜 - 綺麗  ",
+"中森明菜 - 薔薇一夜  ",
+"中西保志 - 最後の雨  ",
+"中川翔子 - ロマンティックあげるよ",
+"中川翔子 - 乙女のポリシー  ",
+"中村あゆみ - 翼の折れたエンジェル  ",
+"中谷美紀 with 坂本龍一 - 砂の果実  ",
+"中島みゆき - アザミ嬢のララバイ  ",
+"中島みゆき - あした  ",
+"中島みゆき - かもめはかもめ  ",
+"中島みゆき - ピアニシモ  ",
+"中島みゆき - ひとり上手  ",
+"中島みゆき - ファイト!  ",
+"中島みゆき - ヘッドライト・テールライト  ",
+"中島みゆき - わかれうた  ",
+"中島みゆき - 悪女  ",
+"中島みゆき - 永遠の嘘をついてくれ  ",
+"中島みゆき - 化粧  ",
+"中島みゆき - 歌姫  ",
+"中島みゆき - 銀の龍の背に乗って  ",
+"中島みゆき - 空と君のあいだに  ",
+"中島みゆき - 時代  ",
+"中島みゆき - 浅い眠り  ",
+"中島みゆき - 誕生  ",
+"中島みゆき - 地上の星  ",
+"中島みゆき - 宙船  ",
+"中島みゆき - 麦の唄  ",
+"中島みゆき - 命の別名  ",
+"中島みゆき - 旅人のうた  ",
+"中島みゆき - 怜子  ",
+"中島みゆき - 慟哭  ",
+"中島愛 - 天使の絵の具  ",
+"中島美嘉 - Dear  ",
+"中島美嘉 - FIND THE WAY  ",
+"中島美嘉 - Forget Me Not  ",
+"中島美嘉 - GLAMOROUS SKY  ",
+"中島美嘉 - LIFE  ",
+"中島美嘉 - ORION  ",
+"中島美嘉 - STARS  ",
+"中島美嘉 - WILL  ",
+"中島美嘉 - 一番綺麗な私を  ",
+"中島美嘉 - 桜色舞うころ  ",
+"中嶋ユキノ - ピアニシモ  ",
+"長山洋子 - If We Hold On Together  ",
+"長山洋子 - ヴィーナス  ",
+"長山洋子 - ユア・マイ・ラヴ  ",
+"長山洋子 - 捨てられて  ",
+"長渕剛 - 乾杯  ",
+"鳥羽一郎 - 兄弟船  ",
+"珍島物語 天童よしみ",
+"津軽海峡・冬景色　石川さゆり",
+"椎名恵 - LOVE IS ALL  ",
+"椎名林檎 - NIPPON  ",
+"椎名林檎 - カーネーション  ",
+"椎名林檎 - カプチーノ  ",
+"椎名林檎 - ギブス  ",
+"椎名林檎 - ここでキスして。  ",
+"椎名林檎 - 丸の内サディスティック  ",
+"椎名林檎 - 罪と罰  ",
+"椎名林檎 - 人生は夢だらけ  ",
+"椎名林檎 - 本能  ",
+"椎名林檎 - 輪廻ハイライト  ",
+"椎名林檎 - 翳りゆく部屋  ",
+"天城越え　石川さゆり",
+"田原俊彦 - 哀愁でいと  ",
+"田原俊彦 - 抱きしめてTONIGHT  ",
+"田村直美 - ゆずれない願い  ",
+"渡月橋 ～君 想ふ～ 倉木麻衣",
+"渡辺真知子 - かもめが翔んだ日  ",
+"渡辺美里 - BELIEVE  ",
+"渡辺美里 - My Revolution  ",
+"渡辺美里 - サマータイム ブルース  ",
+"渡辺美里 - 卒業  ",
+"渡辺美里 - 悲しいね  ",
+"都はるみ - 北の宿から  ",
+"島の詩　LIA(AIR)",
+"島倉千代子 - 人生いろいろ  ",
+"島谷ひとみ - パピヨン  ",
+"島谷ひとみ - 亜麻色の髪の乙女  ",
+"島谷ひとみ - 恋人がサンタクロース  ",
+"島津亜矢 - 花～すべての人の心に花を～  ",
+"藤井フミヤ - TRUE LOVE  ",
+"藤原さくら - 君は天然色  ",
+"藤谷美和子, 大内義昭 - 愛が生まれた日  ",
+"藤田淑子 - ははうえさま  ",
+"藤田麻衣子 - 恋に落ちて  ",
+"藤本美貴 - ロマンティック 浮かれモード  ",
+"童謡 - うれしいひなまつり  ",
+"童謡 - たなばたさま  ",
+"童謡 - とんでったバナナ  ",
+"童謡 - 犬のおまわりさん  ",
+"童謡・唱歌 - おばけなんてないさ  ",
+"童謡・唱歌 - やきいもグーチーパー  ",
+"童謡・唱歌 - 赤い靴  ",
+"徳永英明 - レイニーブルー  ",
+"徳永英明 - 壊れかけのRadio  ",
+"徳永英明 - 最後の言い訳  ",
+"内山田洋とクール・ファイブ - 長崎は今日も雨だった  ",
+"内田有紀 - Only You  ",
+"内田有紀 - 幸せになりたい  ",
+"内田有紀 - 明日は明日の風が吹く  ",
+"南紗椰 - ハンバーグのうた  ",
+"南野陽子 - はいからさんが通る  ",
+"南野陽子 - 楽園のDoor  ",
+"南野陽子 - 秋のIndication  ",
+"南野陽子 - 吐息でネット  ",
+"日向坂46 - 君しか勝たん  ",
+"日本国国歌 - 君が代  ",
+"乃木坂46 - 13日の金曜日  ",
+"乃木坂46 - Another Ghost  ",
+"乃木坂46 - I see...  ",
+"乃木坂46 - Route 246  ",
+"乃木坂46 - Sing Out!  ",
+"乃木坂46 - Tender days  ",
+"乃木坂46 - あの日 僕は咄嗟に嘘をついた  ",
+"乃木坂46 - あらかじめ語られるロマンス  ",
+"乃木坂46 - ありがちな恋愛  ",
+"乃木坂46 - いつかできるから今日できる  ",
+"乃木坂46 - インフルエンサー  ",
+"乃木坂46 - おいでシャンプー  ",
+"乃木坂46 - おひとりさま天国  ",
+"乃木坂46 - ガールズルール  ",
+"乃木坂46 - きっかけ  ",
+"乃木坂46 - ぐるぐるカーテン  ",
+"乃木坂46 - コウモリよ  ",
+"乃木坂46 - ここじゃないどこか  ",
+"乃木坂46 - ここにいる理由  ",
+"乃木坂46 - ここにはないもの  ",
+"乃木坂46 - ごめんねFingers crossed  ",
+"乃木坂46 - サイコキネシスの可能性  ",
+"乃木坂46 - さゆりんご募集中  ",
+"乃木坂46 - サヨナラの意味  ",
+"乃木坂46 - しあわせの保護色  ",
+"乃木坂46 - ジコチューで行こう!  ",
+"乃木坂46 - シャキイズム  ",
+"乃木坂46 - シンクロニシティ  ",
+"乃木坂46 - せっかちなかたつむり  ",
+"乃木坂46 - その先の出口  ",
+"乃木坂46 - ダンケシェーン  ",
+"乃木坂46 - でこぴん  ",
+"乃木坂46 - なぞの落書き  ",
+"乃木坂46 - ネーブルオレンジ  ",
+"乃木坂46 - ハウス!  ",
+"乃木坂46 - ハルジオンが咲く頃  ",
+"乃木坂46 - バレッタ  ",
+"乃木坂46 - ファンタスティック3色パン  ",
+"乃木坂46 - ボーダー  ",
+"乃木坂46 - もう少しの夢  ",
+"乃木坂46 - やさしさとは  ",
+"乃木坂46 - やさしさなら間に合ってる  ",
+"乃木坂46 - ゆっくりと咲く花  ",
+"乃木坂46 - 価値あるもの  ",
+"乃木坂46 - 懐かしさの先  ",
+"乃木坂46 - 空気感  ",
+"乃木坂46 - 君に叱られた  ",
+"乃木坂46 - 好きになってみた  ",
+"乃木坂46 - 今、話したい誰かがいる  ",
+"乃木坂46 - 思い出ファースト  ",
+"乃木坂46 - 自惚れビーチ  ",
+"乃木坂46 - 渋谷ブルース  ",
+"乃木坂46 - 人は夢を二度見る  ",
+"乃木坂46 - 走れ!Bicycle  ",
+"乃木坂46 - 太陽に口説かれて  ",
+"乃木坂46 - 太陽ノック  ",
+"乃木坂46 - 逃げ水  ",
+"乃木坂46 - 届かなくたって…  ",
+"乃木坂46 - 日常  ",
+"乃木坂46 - 歩道橋  ",
+"乃木坂46 - 忘却と美学  ",
+"乃木坂46 - 僕は僕を好きになる  ",
+"乃木坂46 - 夜明けまで強がらなくてもいい",
+"乃木坂46 - 裸足でSummer  ",
+"白鳥英美子 - 花  ",
+"八神純子 - Mr.ブルー  ",
+"八神純子 - バースデイ・ソング  ",
+"八神純子 - パープルタウン",
+"八神純子 - ポーラー・スター  ",
+"八神純子 - 雨の日のひとりごと  ",
+"八神純子 - 思い出は美しすぎて  ",
+"八代亜紀 - 雨の慕情  ",
+"伴都美子 - コーヒー・ルンバ  ",
+"飯島真理 - 私の彼はパイロット PART I  ",
+"飯島真理 - 天使の絵の具  ",
+"悲しみがとまらない　杏里",
+"尾崎亜美 - マイ・ピュア・レディ  ",
+"尾崎豊 - I LOVE YOU  ",
+"美空ひばり - 愛燦燦  ",
+"美空ひばり - 車屋さん  ",
+"美空ひばり - 川の流れのように  ",
+"美川憲一 - さそり座の女  ",
+"氷川きよし - きよしのズンドコ節  ",
+"氷川きよし - 三百六十五歩のマーチ  ",
+"浜崎あゆみ - appears  ",
+"浜崎あゆみ - M  ",
+"浜田雅功, 槇原敬之 - チキンライス  ",
+"浜田省吾 - もうひとつの土曜日  ",
+"浜田省吾 - 悲しみは雪のように  ",
+"不協和音　欅坂46",
+"風 - 海岸通  ",
+"福山雅治 - 家族になろうよ  ",
+"福山雅治 - 桜坂  ",
+"平井堅 - 瞳をとじて  ",
+"平原綾香 - Jupiter  ",
+"平原綾香 - 明日  ",
+"平松愛理 - 部屋とYシャツと私",
+"平尾昌晃＆畑中葉子 - カナダからの手紙  ",
+"米津玄師 - LOSER  ",
+"米津玄師 - ゴーゴー幽霊船  ",
+"米津玄師 - 海の幽霊  ",
+"米津玄師 - 打上花火  ",
+"米津玄師, 菅田将暉 - 灰色と青  ",
+"米米CLUB - 君がいるだけで  ",
+"米米CLUB - 浪漫飛行  ",
+"米良美一 - もののけ姫  ",
+"豊島たづみ - とまどいトワイライト  ",
+"北原ミレイ - 石狩挽歌  ",
+"北島三郎 - まつり  ",
+"僕はくま　宇多田ヒカル",
+"本田美奈子 - Temptation(誘惑)  ",
+"本田美奈子 – 1986年のマリリン",
+"本田美奈子, 林原めぐみ - アメイジング・グレイス  ",
+"本田美奈子. - Oneway Generation  ",
+"本田美奈子. - Temptation  ",
+"本田美奈子. - アメイジング・グレイス  ",
+"本田美奈子. - アリア  ",
+"本田美奈子. - エデンの東  ",
+"本田美奈子. - この歌をfor you  ",
+"本田美奈子. - この素晴らしき世界  ",
+"本田美奈子. - スケジュール  ",
+"本田美奈子. - ソルヴェイグの歌  ",
+"本田美奈子. - タイスの瞑想曲  ",
+"本田美奈子. - つばさ  ",
+"本田美奈子. - ニューシネマパラダイス 愛のテーマ  ",
+"本田美奈子. - ハーフムーンはあわてないで  ",
+"本田美奈子. - ら・ら・ば・い  ",
+"本田美奈子. - 愛の過ぎゆくままに  ",
+"本田美奈子. - 愛の賛歌  ",
+"本田美奈子. - 殺意のバカンス  ",
+"本田美奈子. - 命をあげよう  ",
+"本名陽子 - カントリー・ロード  ",
+"麻丘めぐみ - わたしの彼は左きき  ",
+"麻倉未稀 - RUNAWAY  ",
+"麻倉未稀 - What a feeling  ",
+"麻倉未稀 - ヒーロー  ",
+"未来へ　Kiroro",
+"魅せられて　ジュディ・オング",
+"夢見る少女じゃいられない  相川七瀬",
+"明日への扉  I WiSH",
+"茂森あゆみ・速水けんたろう - だんご3兄弟  ",
+"木村カエラ - Butterfly  ",
+"木村弓 - いつも何度でも  ",
+"木綿のハンカチーフ 太田裕美",
+"夜明けのMEW　小泉今日子",
+"矢野顕子 - 春咲小紅  ",
+"薬師丸ひろ子 - Woman  ",
+"薬師丸ひろ子 - すこしだけ やさしく  ",
+"薬師丸ひろ子 - ステキな恋の忘れ方  ",
+"薬師丸ひろ子 - メイン・テーマ",
+"薬師丸ひろ子 - 語りつぐ愛に  ",
+"薬師丸ひろ子 - 時代  ",
+"薬師丸ひろ子 - 紳士同盟  ",
+"薬師丸ひろ子 - 戦士の休息  ",
+"薬師丸ひろ子 - 探偵物語  ",
+"薬師丸ひろ子 - 夢で逢えたら  ",
+"優しい雨　小泉今日子",
+"由紀さおり - 夜明けのスキャット  ",
+"来生たかお - Goodbye Day  ",
+"来生たかお - シルエット・ロマンス  ",
+"来生たかお - はぐれそうな天使  ",
+"来生たかお - 夢の途中  ",
+"嵐 - Love so sweet  ",
+"嵐 - Monster  ",
+"嵐 - One Love  ",
+"嵐 - きっと大丈夫  ",
+"緑黄色社会 - 花になって  ",
+"鈴木亜美 - BE TOGETHER  ",
+"鈴木雅之 - 違う、そうじゃない  ",
+"鈴木聖美 with RATS & STAR - ロンリー・チャップリン  ",
+"恋人がサンタクロース Flower",
+"恋人たちのクリスマス - Mariah Carey",
+"蓮井朱夏 - ZOO ～愛をください～  ",
+"凛として時雨 - 赤い誘惑  ",
+"欅坂46 - サイレントマジョリティー  ",
+"欅坂46 - 二人セゾン  ",
+"薔薇は美しく散る　鈴木宏子　ベルサイユのばら",
+"槇原敬之 - もう恋なんてしない  ",
+"μ's - 輝夜の城で踊りたい  "
+];
+
+let audioCtx = null;
+let rouletteInterval = null;
+
+// Safari対応：オーディオの初期化と再利用を確実に行う
+function initAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+// Safari対応：ノードを毎回確実に切断し、メモリの上限エラーを防ぐ
+function playTickSound() {
+    try {
+        initAudioContext();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.05);
+        
+        // メモリリーク防止用の確実な切断
+        setTimeout(() => {
+            osc.disconnect();
+            gain.disconnect();
+        }, 100);
+    } catch(e) { console.log(e); }
+}
+
+function playRouletteSound() {
+    stopRouletteSound();
+    rouletteInterval = setInterval(playTickSound, 120);
+}
+
+function stopRouletteSound() {
+    if (rouletteInterval) {
+        clearInterval(rouletteInterval);
+        rouletteInterval = null;
+    }
+}
+
+function playResultSound() {
+    try {
+        initAudioContext();
+        const now = audioCtx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, index) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + index * 0.1);
+            gain.gain.setValueAtTime(0.1, now + index * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.1 + 0.4);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + index * 0.1);
+            osc.stop(now + index * 0.1 + 0.4);
+            
+            setTimeout(() => {
+                osc.disconnect();
+                gain.disconnect();
+            }, 600);
+        });
+    } catch(e) { console.log(e); }
+}
+
+function renderList() {
+    const kw = document.getElementById('searchInput').value.toLowerCase();
+    const list = allSongs.filter(s => s.toLowerCase().includes(kw));
+    
+    document.getElementById('songCount').innerText = allSongs.length;
+    document.getElementById('searchCount').innerText = list.length;
+    
+    document.getElementById('songList').innerHTML = list.map(s => `
+        <div class="list-item">
+            <span>${s}</span>
+            <span class="del-btn" onclick="removeSong('${s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">×</span>
+        </div>
+    `).join('');
+}
+
+function removeSong(name) {
+    allSongs = allSongs.filter(s => s !== name);
+    renderList();
+}
+
+function addSong() {
+    const inp = document.getElementById('addInput');
+    const val = inp.value.trim();
+    if (val && !allSongs.includes(val)) {
+        allSongs.unshift(val); 
+        inp.value = '';
+        renderList();
+    }
+}
+
+function firePawHearts() {
+    ['ph1','ph2','ph3'].forEach((id, i) => {
+        const h = document.getElementById(id);
+        if(!h) return;
+        h.classList.remove('go');
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setTimeout(() => h.classList.add('go'), i * 75);
+            });
+        });
+    });
+}
+
+function triggerPawPress() {
+    const btn = document.getElementById('pawBtn');
+    if(!btn) return;
+    btn.classList.remove('pressed');
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            btn.classList.add('pressed');
+            firePawHearts();
+            setTimeout(() => btn.classList.remove('pressed'), 320);
+        });
+    });
+}
+
+function hideAll() {
+    ['slot-default','anim-slot','anim-countdown','anim-card','anim-roulette','anim-garagara','result-display']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.style.display = 'none';
+        });
+}
+
+function showResult(songs) {
+    stopRouletteSound();
+    playResultSound();
+
+    songs.forEach(song => {
+        allSongs = allSongs.filter(s => s !== song);
+    });
+    for(let i = songs.length - 1; i >= 0; i--) {
+        allSongs.unshift(songs[i]);
+    }
+
+    renderList();
+    hideAll();
+    
+    const el = document.getElementById('result-display');
+    if(!el) return;
+    el.style.display = 'flex';
+    
+    el.innerHTML = songs.map((s, i) => {
+        const escapedSong = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `
+            <div class="result-row" id="resRow_${i}" style="animation-delay:${i*0.12}s">
+                <span class="result-song-text">✨ ${s}</span>
+                <div class="result-del-btn" title="この曲をリストから削除" onclick="removeSongFromResult('${escapedSong}', ${i})">×</div>
+            </div>
+        `;
+    }).join('');
+
+    setTimeout(() => {
+        const container = document.getElementById('zoomContainer');
+        if (container) {
+            container.classList.remove('zoomed');
+        }
+        const btn = document.getElementById('pawBtn');
+        if(btn) btn.disabled = false;
+    }, 5000); 
+}
+
+function removeSongFromResult(songName, index) {
+    allSongs = allSongs.filter(s => s !== songName);
+    renderList();
+    
+    const row = document.getElementById(`resRow_${index}`);
+    if(row) {
+        row.classList.add('deleted');
+        const txt = row.querySelector('.result-song-text');
+        if(txt) txt.textContent = `🗑️ 削除しました`;
+        const delBtn = row.querySelector('.result-del-btn');
+        if(delBtn) delBtn.style.display = 'none';
+    }
+}
+
+function setBadge(name) {
+    const b = document.getElementById('effect-badge');
+    if(!b) return;
+    b.textContent = name;
+    b.classList.add('show');
+    setTimeout(() => b.classList.remove('show'), 2200);
+}
+
+/* 演出A: スロット */
+function effectSlot(pool, finalSongs) {
+    return new Promise((resolve) => {
+        setBadge('🎰 スロット');
+        hideAll();
+        const wrap = document.getElementById('anim-slot');
+        if(!wrap) { resolve(); return; }
+        wrap.style.display = 'flex';
+
+        const REELS = 3;
+        wrap.innerHTML = '';
+        const reelEls = [];
+        for (let r = 0; r < REELS; r++) {
+            const reel = document.createElement('div');
+            reel.className = 'slot-reel';
+            const inner = document.createElement('div');
+            inner.className = 'slot-reel-inner';
+            reel.appendChild(inner);
+            wrap.appendChild(reel);
+            reelEls.push(inner);
+        }
+
+        const ITEM_H = 72;
+        const positions = [0, 0, 0];
+        const speeds = [18, 14, 10];
+
+        function buildItems(inner, songs, extra) {
+            inner.innerHTML = '';
+            const list = [];
+            for (let i = 0; i < extra; i++) list.push(songs[Math.floor(Math.random()*songs.length)]);
+            list.forEach(s => {
+                const d = document.createElement('div');
+                d.className = 'reel-item';
+                d.textContent = s;
+                inner.appendChild(d);
+            });
+        }
+
+        const mainPool = pool.length > 0 ? pool : finalSongs;
+        for (let r = 0; r < REELS; r++) buildItems(reelEls[r], mainPool, 40);
+
+        let frame = 0;
+        const stopFrames = [40, 65, 90];
+        let stopped = [false, false, false];
+        
+        const repSong = finalSongs[0]; 
+        const finalItems = [
+            mainPool[Math.floor(Math.random()*mainPool.length)] || repSong,
+            mainPool[Math.floor(Math.random()*mainPool.length)] || repSong,
+            repSong
+        ];
+
+        function animate() {
+            frame++;
+            for (let r = 0; r < REELS; r++) {
+                if (stopped[r]) continue;
+                positions[r] += speeds[r];
+                const totalH = reelEls[r].childElementCount * ITEM_H;
+                if (positions[r] >= totalH - ITEM_H * 5) positions[r] = 0;
+                
+                // Safari用translate3d最適化
+                reelEls[r].style.transform = `translate3d(0, -${positions[r]}px, 0)`;
+
+                if (frame >= stopFrames[r]) {
+                    stopped[r] = true;
+                    const lastItem = document.createElement('div');
+                    lastItem.className = 'reel-item';
+                    lastItem.textContent = finalItems[r];
+                    lastItem.style.color = '#ff1493';
+                    lastItem.style.fontSize = '12px';
+                    reelEls[r].innerHTML = '';
+                    reelEls[r].appendChild(lastItem);
+                    reelEls[r].style.transform = 'translate3d(0, 0, 0)';
+                }
+            }
+            if (!stopped.every(Boolean)) {
+                requestAnimationFrame(animate);
+            } else {
+                setTimeout(() => {
+                    showResult(finalSongs);
+                    resolve();
+                }, 600);
+            }
+        }
+        requestAnimationFrame(animate);
+    });
+}
+
+/* 演出B: カウントダウン */
+async function effectCountdown(pool, finalSongs) {
+    setBadge('💥 カウントダウン');
+    hideAll();
+    const cd = document.getElementById('anim-countdown');
+    const num = document.getElementById('countdown-num');
+    const res = document.getElementById('countdown-result');
+    if(!cd || !num || !res) return;
+    cd.style.display = 'flex';
+    res.textContent = '';
+
+    for (let n = 3; n >= 1; n--) {
+        num.textContent = n;
+        num.style.color = n === 1 ? '#ff1493' : n === 2 ? '#ff4da6' : '#ff69b4';
+        const w = document.getElementById('slot-wrap');
+        if(w) w.classList.remove('cd-flashing');
+        
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if(w) w.classList.add('cd-flashing');
+        await new Promise(r => setTimeout(r, 700));
+    }
+    num.textContent = '🎵';
+    num.style.color = '#ff1493';
+    res.textContent = finalSongs.length === 1 ? finalSongs[0] : `計 ${finalSongs.length} 曲 当選！`;
+    const w = document.getElementById('slot-wrap');
+    if(w) w.classList.add('cd-flashing');
+    await new Promise(r => setTimeout(r, 900));
+    showResult(finalSongs);
+}
+
+/* 演出C: カードめくり */
+function effectCard(pool, finalSongs) {
+    return new Promise((resolve) => {
+        setBadge('🃏 選んでカードめくり');
+        hideAll();
+        const wrap = document.getElementById('anim-card');
+        if(!wrap) { resolve(); return; }
+        wrap.style.display = 'flex';
+        wrap.innerHTML = '';
+
+        let cardsData = [];
+        const CARDS_COUNT = Math.max(4, finalSongs.length + 2); 
+
+        let targetSongs = [...finalSongs];
+        let dummyPool = pool.length > 0 ? pool : allSongs.filter(s => !finalSongs.includes(s));
+        if (dummyPool.length === 0) dummyPool = ["Lucky Song♪"];
+
+        for (let i = 0; i < CARDS_COUNT; i++) {
+            if (targetSongs.length > 0) {
+                cardsData.push({ song: targetSongs.pop(), isWin: true });
+            } else {
+                const randDummy = dummyPool[Math.floor(Math.random() * dummyPool.length)];
+                cardsData.push({ song: randDummy, isWin: false });
+            }
+        }
+        cardsData.sort(() => Math.random() - 0.5);
+
+        let winCountNeeded = finalSongs.length; 
+        let openedWinCount = 0;
+        let isLock = false; 
+
+        cardsData.forEach((data) => {
+            const card = document.createElement('div');
+            card.className = 'play-card selectable';
+            card.innerHTML = `
+                <div class="play-card-inner">
+                    <div class="card-back">🐾</div>
+                    <div class="card-face"></div>
+                </div>`;
+            card.querySelector('.card-face').textContent = data.song;
+            wrap.appendChild(card);
+
+            card.addEventListener('click', async () => {
+                if (isLock || card.classList.contains('flipped')) return;
+                isLock = true;
+
+                playTickSound();
+
+                card.classList.remove('selectable');
+                card.classList.add('flipped');
+
+                if (data.isWin) {
+                    openedWinCount++;
+                    card.querySelector('.card-face').style.color = '#ff1493';
+                    card.querySelector('.card-face').style.fontSize = '10px';
+                    card.querySelector('.card-face').style.background = '#fff0f5';
+                } else {
+                    card.querySelector('.card-face').style.color = '#aaa';
+                }
+
+                if (openedWinCount === winCountNeeded) {
+                    stopRouletteSound();
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    const allCards = wrap.querySelectorAll('.play-card');
+                    allCards.forEach(c => {
+                        if (!c.classList.contains('flipped')) {
+                            c.classList.remove('selectable');
+                            c.classList.add('flipped');
+                        }
+                    });
+
+                    await new Promise(r => setTimeout(r, 1500));
+                    showResult(finalSongs); 
+                    resolve();
+                } else {
+                    setTimeout(() => { isLock = false; }, 300);
+                }
+            });
+        });
+    });
+}
+
+/* 演出D: ルーレット */
+function effectRoulette(pool, finalSongs) {
+    return new Promise((resolve) => {
+        setBadge('🌀 ルーレット');
+        hideAll();
+        const wrap = document.getElementById('anim-roulette');
+        if(!wrap) { resolve(); return; }
+        wrap.style.display = 'flex';
+
+        const inner = document.getElementById('roulette-inner');
+        if(!inner) { resolve(); return; }
+        inner.innerHTML = '';
+
+        const repSong = finalSongs[0];
+        const items = [];
+        const loopPool = pool.length > 0 ? pool : [repSong];
+        for (let i = 0; i < 30; i++) items.push(loopPool[Math.floor(Math.random()*loopPool.length)]);
+        items.push(repSong);
+
+        const ITEM_H = 54;
+        items.forEach(s => {
+            const d = document.createElement('div');
+            d.className = 'roulette-item';
+            d.textContent = s;
+            inner.appendChild(d);
+        });
+
+        const totalDist = items.length * ITEM_H - ITEM_H;
+        const duration = 2800;
+        const start = performance.now();
+
+        function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+
+        function step(now) {
+            const elapsed = now - start;
+            const t = Math.min(elapsed / duration, 1);
+            const pos = easeOut(t) * totalDist;
+            
+            // Safari用translate3d最適化
+            inner.style.transform = `translate3d(0, -${pos}px, 0)`;
+            if (t < 1) {
+                requestAnimationFrame(step);
+            } else {
+                inner.style.transform = `translate3d(0, -${totalDist}px, 0)`;
+                setTimeout(() => {
+                    showResult(finalSongs);
+                    resolve();
+                }, 600);
+            }
+        }
+        requestAnimationFrame(step);
+    });
+}
+
+/* 演出E: ガラガラ */
+function effectGaragara(pool, finalSongs) {
+    return new Promise((resolve) => {
+        setBadge('🎊 ガラガラポン');
+        hideAll();
+        
+        const wrap = document.getElementById('anim-garagara');
+        const wheel = document.getElementById('gWheel');
+        const ball = document.getElementById('gBall');
+        const text = document.getElementById('garagara-text');
+        
+        if(!wrap || !wheel || !ball || !text) { resolve(); return; }
+        
+        wrap.style.display = 'flex';
+        wheel.classList.remove('spinning');
+        ball.classList.remove('dropped');
+        ball.style.opacity = '0';
+        text.textContent = '回るよ〜！';
+        
+        const colors = ['#ff2a6d', '#ffd700', '#05d9e8', '#ff69b4', '#39ff14', '#ffffff'];
+        ball.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                wheel.classList.add('spinning');
+                ball.classList.add('dropped');
+            });
+        });
+
+        let tickCount = 0;
+        const tickTimer = setInterval(() => {
+            playTickSound();
+            tickCount++;
+            if(tickCount >= 12) clearInterval(tickTimer);
+        }, 150);
+
+        setTimeout(() => {
+            text.textContent = finalSongs.length === 1 ? '何が出るかな？' : `計 ${finalSongs.length} 曲 当選！`;
+        }, 1800);
+
+        setTimeout(() => {
+            clearInterval(tickTimer);
+            showResult(finalSongs);
+            resolve();
+        }, 2600);
+    });
+}
+
+const EFFECTS = [
+    { name: 'slot',      fn: effectSlot },
+    { name: 'countdown', fn: effectCountdown },
+    { name: 'card',      fn: effectCard },
+    { name: 'roulette',  fn: effectRoulette },
+    { name: 'garagara',  fn: effectGaragara }
+];
+
+async function startSlot() {
+    const kw = document.getElementById('searchInput').value.toLowerCase();
+    let pool = allSongs.filter(s => s.toLowerCase().includes(kw));
+    if (pool.length < 1) { alert('曲が足りません！'); return; }
+
+    const selectEl = document.getElementById('selectCount');
+    let count = parseInt(selectEl.value, 10) || 1;
+    if (count > pool.length) count = pool.length;
+
+    const btn = document.getElementById('pawBtn');
+    if(btn) btn.disabled = true;
+    triggerPawPress();
+
+    // Safari必須：ユーザーのタップ直後のスレッドでオーディオコンテキストをアクティブにする
+    initAudioContext();
+
+    const container = document.getElementById('zoomContainer');
+    if (container) {
+        container.classList.add('zoomed');
+    }
+
+    playRouletteSound(); 
+
+    const effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)];
+
+    const finalSongs = [];
+    const p = [...pool];
+    for (let i = 0; i < count; i++) {
+        const idx = Math.floor(Math.random() * p.length);
+        finalSongs.push(p.splice(idx, 1)[0]);
+    }
+
+    try {
+        await effect.fn(p, finalSongs);
+    } catch(e) {
+        console.log("Effect animation error", e);
+        showResult(finalSongs); 
+    }
+}
+
+// 初回読み込み時のリスト描画
+renderList();
+</script>
+</body>
+</html>
